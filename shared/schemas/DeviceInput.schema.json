@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "deviceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "token": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 4096
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "android",
+        "ios"
+      ]
+    },
+    "appVersion": {
+      "type": "string",
+      "maxLength": 40
+    }
+  },
+  "required": [
+    "deviceId",
+    "token",
+    "platform"
+  ]
+}

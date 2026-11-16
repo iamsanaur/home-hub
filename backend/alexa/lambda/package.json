@@ -1,0 +1,2 @@
+{ "name": "homehub-alexa-forwarder", "version": "1.0.0", "private": true, "type": "module", "main": "index.mjs",
+  "scripts": { "test": "node --test test.mjs", "zip": "zip -q forwarder.zip index.mjs package.json" }, "engines": { "node": ">=22" } }

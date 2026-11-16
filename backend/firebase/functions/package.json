@@ -1,0 +1,41 @@
+{
+  "name": "homehub-functions",
+  "private": true,
+  "description": "HomeHub AI — Cloud Functions: API gateway, MCP server, scheduler, triggers",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run test/unit",
+    "test:emulator": "NODE_OPTIONS=--experimental-require-module vitest run test/rules test/integration --no-file-parallelism",
+    "test": "npm run test:unit && npm run test:emulator",
+    "emulators:test": "firebase --config ../firebase.json emulators:exec --only auth,firestore,storage \"npm run test:emulator\"",
+    "seed": "node lib/scripts/seed.js",
+    "schemas": "node lib/scripts/exportSchemas.js",
+    "serve": "npm run build && firebase --config ../firebase.json emulators:start"
+  },
+  "dependencies": {
+    "@google-cloud/secret-manager": "^6.3.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "express": "^5.3.0",
+    "firebase-admin": "^14.5.1",
+    "firebase-functions": "^7.4.0",
+    "luxon": "^3.7.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@types/express": "^5.0.6",
+    "@types/luxon": "^3.7.6",
+    "@types/node": "^22.20.5",
+    "firebase": "^12.19.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

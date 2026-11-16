@@ -1,0 +1,32 @@
+# HomeHub's own Hermes runtime in Docker — separate from any personal Hermes install.
+# Managed by scripts/hermes-docker.sh (prepares the data folder, starts this stack, wires the
+# public URL into Cloud Functions). Run that script instead of calling compose directly.
+#
+#   hermes  Hermes Agent v0.21.2 (commit 5eb99eb2), built from the pinned upstream checkout.
+#           All state lives in HOMEHUB_HERMES_HOME (default ~/.hermes-homehub), never ~/.hermes.
+#           The API server requires API_SERVER_KEY; the profile disables terminal/file/web/browser tools.
+#   tunnel  Cloudflare quick tunnel so HomeHub's Cloud Functions (Google) can reach the API server
+#           without opening a port on this machine. Its URL changes when the tunnel restarts.
+name: homehub-hermes
+
+services:
+  hermes:
+    image: homehub-hermes:v0.21.2-5eb99eb2
+    container_name: homehub-hermes
+    restart: unless-stopped
+    volumes:
+      - ${HOMEHUB_HERMES_HOME:?set by scripts/hermes-docker.sh}:/opt/data
+    environment:
+      - HERMES_UID=${HERMES_UID:-10000}
+      - HERMES_GID=${HERMES_GID:-10000}
+    # Loopback only on the host (for local checks); remote access goes through the tunnel.
+    ports:
+      - "127.0.0.1:8652:8642"
+    command: ["gateway", "run"]
+
+  tunnel:
+    image: cloudflare/cloudflared:2025.11.1
+    container_name: homehub-hermes-tunnel
+    restart: unless-stopped
+    depends_on: [hermes]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://hermes:8642"]

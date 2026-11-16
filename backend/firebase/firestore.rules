@@ -1,0 +1,460 @@
+rules_version = '2';
+
+// HomeHub AI — Cloud Firestore Security Rules
+//
+// Model: every household-scoped document lives under households/{hid}. Access is
+// decided by the caller's membership document households/{hid}/members/{uid},
+// which ONLY trusted server code (Cloud Functions / API gateway) can write.
+// A client-supplied householdId is never trusted on its own: every rule looks up
+// the caller's membership in that exact household.
+//
+// Roles: owner > admin > adult > child; staff is a separate, restricted role.
+// Privileged operations (household creation, invitations, role changes, approvals,
+// agent sessions, usage ledger, scheduled jobs, memory) are server-only.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+
+    function memberPath(hid) {
+      return /databases/$(database)/documents/households/$(hid)/members/$(uid());
+    }
+    function isMember(hid) {
+      return signedIn() && exists(memberPath(hid))
+        && get(memberPath(hid)).data.status == 'active';
+    }
+    function member(hid) { return get(memberPath(hid)).data; }
+    function role(hid) { return member(hid).role; }
+    function roleIn(hid, roles) { return isMember(hid) && role(hid) in roles; }
+
+    function isManager(hid) { return roleIn(hid, ['owner', 'admin']); }
+    function isAdultPlus(hid) { return roleIn(hid, ['owner', 'admin', 'adult']); }
+    function isChild(hid) { return roleIn(hid, ['child']); }
+    function isStaff(hid) { return roleIn(hid, ['staff']); }
+
+    // Finance and documents may be explicitly withheld from an adult via
+    // members/{uid}.permissions.finance == false (default: allowed for adults+).
+    function canFinance(hid) {
+      return isAdultPlus(hid)
+        && member(hid).get('permissions', {}).get('finance', true) == true;
+    }
+
+    // Write helpers
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function changed() { return incoming().diff(existing()).affectedKeys(); }
+    function unchanged(fields) { return !changed().hasAny(fields); }
+    function onlyChanged(fields) { return changed().hasOnly(fields); }
+
+    // Optimistic concurrency: every client update must bump version by exactly 1.
+    function versionBumped() {
+      return incoming().version == existing().version + 1;
+    }
+    function validNewDoc(hid) {
+      return incoming().householdId == hid
+        && incoming().createdBy == uid()
+        && incoming().version == 1
+        && incoming().createdAt == request.time;
+    }
+    function validUpdate() {
+      return unchanged(['householdId', 'createdBy', 'createdAt'])
+        && versionBumped()
+        && incoming().updatedBy == uid()
+        && incoming().updatedAt == request.time;
+    }
+    function isStr(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+    function optStr(data, k, max) {
+      return !(k in data) || data[k] == null || (data[k] is string && data[k].size() <= max);
+    }
+    function isMinor(v) { return v is int && v >= 0 && v < 100000000000000; }
+    function isCurrency(v) { return v is string && v.matches('^[A-Z]{3}$'); }
+
+    // ---------- users ----------
+    match /users/{userId} {
+      allow read: if signedIn() && uid() == userId;
+      allow create: if signedIn() && uid() == userId
+        && incoming().keys().hasOnly(['displayName', 'email', 'photoURL', 'locale', 'timezone',
+             'activeHouseholdId', 'createdAt', 'updatedAt', 'onboarding', 'notificationPrefs', 'analyticsConsent'])
+        && optStr(incoming(), 'displayName', 120);
+      allow update: if signedIn() && uid() == userId
+        && onlyChanged(['displayName', 'photoURL', 'locale', 'timezone', 'activeHouseholdId',
+             'updatedAt', 'onboarding', 'notificationPrefs', 'analyticsConsent'])
+        && optStr(incoming(), 'displayName', 120)
+        // activeHouseholdId may only point to a household the user belongs to.
+        && (!('activeHouseholdId' in changed()) || incoming().activeHouseholdId == null
+            || isMember(incoming().activeHouseholdId));
+      allow delete: if false; // account deletion runs server-side
+
+      // Device push tokens, private to the user.
+      match /devices/{deviceId} {
+        allow read, delete: if signedIn() && uid() == userId;
+        allow create, update: if signedIn() && uid() == userId
+          && incoming().keys().hasOnly(['token', 'platform', 'updatedAt', 'appVersion'])
+          && isStr(incoming().token, 4096) && incoming().platform in ['android', 'ios'];
+      }
+    }
+
+    // Server-only top-level collections.
+    match /agentGrants/{id} { allow read, write: if false; }
+    match /rateLimits/{id} { allow read, write: if false; }
+    match /idempotency/{id} { allow read, write: if false; }
+    match /invitationTokens/{id} { allow read, write: if false; }
+
+    // ---------- households ----------
+    match /households/{hid} {
+      allow read: if isMember(hid);
+      allow create, delete: if false; // server-only
+      allow update: if isManager(hid)
+        && onlyChanged(['name', 'timezone', 'currency', 'locale', 'country', 'updatedAt', 'updatedBy', 'settings'])
+        && isStr(incoming().name, 80)
+        && isCurrency(incoming().currency)
+        && incoming().updatedBy == uid();
+
+      match /members/{memberId} {
+        allow read: if isMember(hid);
+        allow write: if false; // roles and membership are server-controlled
+      }
+
+      match /invitations/{invitationId} {
+        allow read: if isManager(hid);
+        allow write: if false;
+      }
+
+      match /preferences/{docId} {
+        allow read: if isMember(hid);
+        allow write: if isManager(hid);
+      }
+
+      // ---------- tasks ----------
+      match /tasks/{taskId} {
+        function assignedToMe() { return existing().assigneeUid == uid(); }
+        function taskShape(d) {
+          return isStr(d.title, 200)
+            && d.status in ['open', 'in_progress', 'done', 'cancelled']
+            && d.priority in ['low', 'normal', 'high', 'urgent']
+            && optStr(d, 'notes', 4000) && optStr(d, 'category', 60);
+        }
+        allow read: if isAdultPlus(hid)
+          || ((isChild(hid) || isStaff(hid)) && existing().assigneeUid == uid());
+        allow create: if validNewDoc(hid) && taskShape(incoming())
+          && (isAdultPlus(hid) || (isChild(hid) && incoming().assigneeUid == uid()));
+        allow update: if validUpdate() && taskShape(incoming()) && (
+            isAdultPlus(hid)
+            || ((isChild(hid) || isStaff(hid)) && assignedToMe()
+                && onlyChanged(['status', 'completedAt', 'completedBy', 'checklist', 'version', 'updatedAt', 'updatedBy'])
+                && incoming().assigneeUid == uid()));
+        allow delete: if isManager(hid) || (isAdultPlus(hid) && existing().createdBy == uid());
+
+        match /comments/{commentId} {
+          function parent() { return get(/databases/$(database)/documents/households/$(hid)/tasks/$(taskId)).data; }
+          allow read: if isAdultPlus(hid) || (isMember(hid) && parent().assigneeUid == uid());
+          allow create: if (isAdultPlus(hid) || (isMember(hid) && parent().assigneeUid == uid()))
+            && incoming().authorUid == uid() && isStr(incoming().body, 2000)
+            && incoming().createdAt == request.time;
+          allow update, delete: if false;
+        }
+      }
+
+      // Completion history: written by server triggers only.
+      match /taskOccurrences/{occurrenceId} {
+        allow read: if isAdultPlus(hid) || (isMember(hid) && existing().assigneeUid == uid());
+        allow write: if false;
+      }
+
+      // ---------- cleaning ----------
+      match /cleaningRooms/{roomId} {
+        allow read: if isMember(hid);
+        allow create: if isAdultPlus(hid) && validNewDoc(hid) && isStr(incoming().name, 80);
+        allow update: if isAdultPlus(hid) && validUpdate();
+        allow delete: if isAdultPlus(hid);
+      }
+      match /cleaningSchedules/{scheduleId} {
+        allow read: if isAdultPlus(hid) || (isMember(hid) && existing().assigneeUid == uid())
+          || (isChild(hid) && existing().get('visibleToChildren', false) == true);
+        allow create: if isAdultPlus(hid) && validNewDoc(hid) && isStr(incoming().title, 120)
+          && incoming().frequency in ['daily', 'weekly', 'monthly', 'seasonal'];
+        allow update: if validUpdate() && (isAdultPlus(hid)
+          || (isMember(hid) && existing().assigneeUid == uid()
+              && onlyChanged(['lastCompletedAt', 'lastCompletedBy', 'nextDueAt', 'version', 'updatedAt', 'updatedBy'])));
+        allow delete: if isAdultPlus(hid);
+      }
+
+      // ---------- shopping & pantry (staff such as cooks participate) ----------
+      match /shoppingLists/{listId} {
+        allow read: if isMember(hid);
+        allow create: if (isAdultPlus(hid) || isStaff(hid)) && validNewDoc(hid) && isStr(incoming().name, 80);
+        allow update: if (isAdultPlus(hid) || isStaff(hid)) && validUpdate();
+        allow delete: if isAdultPlus(hid);
+      }
+      match /groceryItems/{itemId} {
+        function itemShape(d) {
+          return isStr(d.name, 120) && isStr(d.listId, 128)
+            && d.quantity is number && d.quantity > 0
+            && (!('estimatedPriceMinor' in d) || d.estimatedPriceMinor == null || isMinor(d.estimatedPriceMinor))
+            && (!('actualPriceMinor' in d) || d.actualPriceMinor == null || isMinor(d.actualPriceMinor));
+        }
+        allow read: if isMember(hid);
+        allow create: if isMember(hid) && validNewDoc(hid) && itemShape(incoming());
+        allow update: if isMember(hid) && validUpdate() && itemShape(incoming())
+          && (!isChild(hid) || onlyChanged(['purchased', 'purchasedAt', 'purchasedBy', 'version', 'updatedAt', 'updatedBy']));
+        allow delete: if isAdultPlus(hid) || (isMember(hid) && existing().createdBy == uid());
+      }
+      match /pantryItems/{itemId} {
+        allow read: if isMember(hid);
+        allow create: if (isAdultPlus(hid) || isStaff(hid)) && validNewDoc(hid)
+          && isStr(incoming().name, 120) && incoming().quantity is number && incoming().quantity >= 0;
+        allow update: if (isAdultPlus(hid) || isStaff(hid)) && validUpdate()
+          && incoming().quantity is number && incoming().quantity >= 0;
+        allow delete: if isAdultPlus(hid);
+      }
+      // Stock movements are an append-only ledger.
+      match /pantryMovements/{movementId} {
+        allow read: if isAdultPlus(hid) || isStaff(hid);
+        allow create: if (isAdultPlus(hid) || isStaff(hid))
+          && incoming().householdId == hid && incoming().createdBy == uid()
+          && incoming().createdAt == request.time
+          && incoming().kind in ['restock', 'consume', 'waste', 'adjust']
+          && incoming().delta is number;
+        allow update, delete: if false;
+      }
+
+      // ---------- meals ----------
+      match /recipes/{recipeId} {
+        allow read: if isMember(hid);
+        allow create: if (isAdultPlus(hid) || isStaff(hid)) && validNewDoc(hid) && isStr(incoming().name, 120)
+          && incoming().servings is int && incoming().servings > 0;
+        allow update: if (isAdultPlus(hid) || isStaff(hid)) && validUpdate();
+        allow delete: if isAdultPlus(hid);
+      }
+      match /mealPlans/{mealPlanId} {
+        allow read: if isMember(hid);
+        allow create: if isAdultPlus(hid) && validNewDoc(hid);
+        allow update: if isAdultPlus(hid) && validUpdate();
+        allow delete: if isAdultPlus(hid);
+      }
+
+      // ---------- finance (private to finance-permitted adults) ----------
+      match /transactions/{txId} {
+        function txShape(d) {
+          return d.type in ['income', 'expense'] && isMinor(d.amountMinor) && d.amountMinor > 0
+            && isCurrency(d.currency) && isStr(d.category, 60)
+            && d.paymentMethod in ['cash', 'upi', 'card', 'bank_transfer', 'wallet', 'other']
+            && d.occurredAt is timestamp;
+        }
+        allow read: if canFinance(hid);
+        allow create: if canFinance(hid) && validNewDoc(hid) && txShape(incoming());
+        // Financial records are never silently overwritten: version must match and locked
+        // (reconciled) records are immutable.
+        allow update: if canFinance(hid) && validUpdate() && txShape(incoming())
+          && existing().get('locked', false) == false;
+        allow delete: if isManager(hid) && existing().get('locked', false) == false;
+      }
+      match /budgets/{budgetId} {
+        allow read: if canFinance(hid);
+        allow create: if canFinance(hid) && validNewDoc(hid) && isMinor(incoming().limitMinor)
+          && isCurrency(incoming().currency) && incoming().period.matches('^[0-9]{4}-[0-9]{2}$');
+        allow update: if canFinance(hid) && validUpdate() && isMinor(incoming().limitMinor);
+        allow delete: if isManager(hid);
+      }
+      match /savingsGoals/{goalId} {
+        allow read: if canFinance(hid);
+        allow create: if canFinance(hid) && validNewDoc(hid) && isMinor(incoming().targetMinor);
+        allow update: if canFinance(hid) && validUpdate();
+        allow delete: if isManager(hid);
+      }
+      match /bills/{billId} {
+        allow read: if canFinance(hid);
+        allow create: if canFinance(hid) && validNewDoc(hid) && isStr(incoming().name, 120)
+          && isMinor(incoming().amountMinor) && isCurrency(incoming().currency);
+        allow update: if canFinance(hid) && validUpdate();
+        allow delete: if isManager(hid);
+      }
+      // Payment history is append-only and must be explicitly confirmed by the recorder.
+      match /billPayments/{paymentId} {
+        allow read: if canFinance(hid);
+        allow create: if canFinance(hid) && incoming().householdId == hid
+          && incoming().confirmedBy == uid() && incoming().createdAt == request.time
+          && isMinor(incoming().amountMinor) && incoming().amountMinor > 0
+          && isCurrency(incoming().currency) && isStr(incoming().billId, 128);
+        allow update, delete: if false;
+      }
+
+      // ---------- maintenance & inventory ----------
+      match /assets/{assetId} {
+        allow read: if isAdultPlus(hid) || isChild(hid);
+        allow create: if isAdultPlus(hid) && validNewDoc(hid) && isStr(incoming().name, 120);
+        allow update: if isAdultPlus(hid) && validUpdate();
+        allow delete: if isManager(hid);
+      }
+      match /maintenanceRecords/{recordId} {
+        allow read: if isAdultPlus(hid) || (isStaff(hid) && existing().assigneeUid == uid());
+        allow create: if isAdultPlus(hid) && validNewDoc(hid) && isStr(incoming().title, 160)
+          && incoming().status in ['requested', 'scheduled', 'in_progress', 'done', 'cancelled'];
+        allow update: if validUpdate() && (isAdultPlus(hid)
+          || (isStaff(hid) && existing().assigneeUid == uid()
+              && onlyChanged(['status', 'notes', 'version', 'updatedAt', 'updatedBy'])));
+        allow delete: if isManager(hid);
+      }
+      match /inventoryItems/{itemId} {
+        allow read: if isAdultPlus(hid);
+        allow create: if isAdultPlus(hid) && validNewDoc(hid) && isStr(incoming().name, 120);
+        allow update: if isAdultPlus(hid) && validUpdate();
+        allow delete: if isManager(hid);
+      }
+
+      // ---------- calendar ----------
+      match /events/{eventId} {
+        allow read: if isAdultPlus(hid)
+          || (isChild(hid) && existing().get('visibility', 'household') == 'household')
+          || (isStaff(hid) && existing().get('staffVisible', false) == true);
+        allow create: if validNewDoc(hid) && isStr(incoming().title, 160)
+          && incoming().startAt is timestamp && incoming().endAt is timestamp
+          && incoming().endAt >= incoming().startAt
+          && (isAdultPlus(hid) || isChild(hid));
+        allow update: if validUpdate() && (isAdultPlus(hid) || (isChild(hid) && existing().createdBy == uid()));
+        allow delete: if isAdultPlus(hid) || (isChild(hid) && existing().createdBy == uid());
+      }
+
+      // ---------- documents (restricted by default) ----------
+      match /documents/{documentId} {
+        function docVisible() {
+          return isAdultPlus(hid) && (existing().get('restricted', false) == false
+            || uid() in existing().get('allowedUids', []) || isManager(hid));
+        }
+        allow read: if docVisible();
+        allow create: if isAdultPlus(hid) && validNewDoc(hid) && isStr(incoming().title, 160)
+          && incoming().storagePath.matches('^households/' + hid + '/documents/.*');
+        allow update: if docVisible() && validUpdate() && unchanged(['storagePath']);
+        allow delete: if isManager(hid) || (isAdultPlus(hid) && existing().createdBy == uid());
+      }
+
+      // ---------- notes ----------
+      match /notes/{noteId} {
+        function noteVisible() {
+          return (existing().visibility == 'private' && existing().createdBy == uid() && isMember(hid))
+            || (existing().visibility == 'household' && (isAdultPlus(hid) || isChild(hid)));
+        }
+        allow read: if noteVisible();
+        allow create: if isMember(hid) && !isStaff(hid) && validNewDoc(hid)
+          && incoming().visibility in ['private', 'household'] && optStr(incoming(), 'body', 20000);
+        allow update: if noteVisible() && validUpdate() && unchanged(['visibility'])
+          && (existing().createdBy == uid() || isAdultPlus(hid));
+        allow delete: if existing().createdBy == uid() && isMember(hid);
+      }
+
+      // ---------- notifications ----------
+      match /notifications/{notificationId} {
+        allow read: if isMember(hid) && existing().recipientUid == uid();
+        allow update: if isMember(hid) && existing().recipientUid == uid() && onlyChanged(['readAt']);
+        allow create, delete: if false;
+      }
+
+      // ---------- agent, approvals, audit (server-written) ----------
+      match /approvals/{approvalId} {
+        allow read: if isAdultPlus(hid) || (isMember(hid) && existing().requestedBy == uid());
+        allow write: if false;
+      }
+      match /activityLogs/{logId} {
+        allow read: if isManager(hid);
+        allow write: if false;
+      }
+      match /agentSessions/{sessionId} {
+        allow read: if isMember(hid) && existing().ownerUid == uid();
+        allow write: if false;
+        match /messages/{messageId} {
+          allow read: if isMember(hid)
+            && get(/databases/$(database)/documents/households/$(hid)/agentSessions/$(sessionId)).data.ownerUid == uid();
+          allow write: if false;
+        }
+      }
+      match /agentWorkflows/{workflowId} {
+        allow read: if isManager(hid) || (isMember(hid) && existing().requestedBy == uid());
+        allow write: if false;
+      }
+      match /agentUsage/{usageId} {
+        allow read: if isManager(hid);
+        allow write: if false;
+      }
+      match /scheduledJobs/{jobId} {
+        allow read: if isManager(hid);
+        allow write: if false;
+      }
+      match /memories/{memoryId} {
+        allow read: if (existing().scope == 'household' && isAdultPlus(hid))
+          || (existing().scope == 'private' && existing().ownerUid == uid() && isMember(hid));
+        allow write: if false;
+      }
+      match /syncConflicts/{conflictId} {
+        allow read: if isMember(hid) && existing().uid == uid();
+        allow write: if false;
+      }
+
+      // ---------- addendum phase 1: integrations, devices, automations, channels (all server-written) ----------
+      // Clients read through these rules (or the gateway) but never write: every change goes
+      // through the gateway's policy gate, so permissions, approvals and audit can't be bypassed.
+      match /integrations/{integrationId} {
+        allow read: if (existing().scope == 'personal' && existing().ownerUid == uid() && isMember(hid))
+          || (existing().scope != 'personal' && isManager(hid));
+        allow write: if false;
+        match /pluginState/{key} { allow read, write: if false; }
+      }
+      match /integrationSecretsRefs/{integrationId} { allow read, write: if false; }
+      match /integrationEvents/{eventId} { allow read, write: if false; }
+      match /devices/{deviceId} {
+        // Children and staff never see physical-safety devices (locks, garage, alarms…).
+        allow read: if isAdultPlus(hid) || (isMember(hid) && existing().safety != 'physical_safety');
+        allow write: if false;
+      }
+      match /deviceRooms/{roomId} {
+        allow read: if isMember(hid);
+        allow write: if false;
+      }
+      match /deviceBridges/{bridgeId} {
+        allow read: if isManager(hid);
+        allow write: if false;
+      }
+      match /automations/{automationId} {
+        allow read: if isAdultPlus(hid);
+        allow write: if false;
+        match /billMarkers/{markerId} { allow read, write: if false; }
+      }
+      match /automationRuns/{runId} {
+        allow read: if isAdultPlus(hid);
+        allow write: if false;
+      }
+      match /channels/{channelType} {
+        allow read: if isAdultPlus(hid);
+        allow write: if false;
+      }
+      match /channelPairings/{pairingId} { allow read, write: if false; }
+      match /skills/{skillName} {
+        allow read: if isMember(hid);
+        allow write: if false;
+      }
+      match /auditEvents/{eventId} {
+        allow read: if isManager(hid) || (isMember(hid) && existing().actorUid == uid());
+        allow write: if false;
+      }
+      match /usageMetrics/{metricId} {
+        allow read: if isManager(hid);
+        allow write: if false;
+      }
+    }
+
+    // Plugin catalog overrides (kill switches) are readable so apps can show them; server-written.
+    match /pluginCatalog/{pluginId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // Server-only top-level collections (OAuth states, Alexa tokens/links, bridge credentials,
+    // rate limits, emulator secrets) fall through to the deny below on purpose.
+    // Anything not matched above is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

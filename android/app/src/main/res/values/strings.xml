@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HomeHub</string>
+    <string name="notification_channel_household">Household</string>
+    <string name="notification_channel_approvals">Approvals</string>
+</resources>

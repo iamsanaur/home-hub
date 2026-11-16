@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "freq": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly",
+        "monthly",
+        "yearly"
+      ]
+    },
+    "interval": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 366
+    },
+    "byWeekday": {
+      "maxItems": 7,
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 7
+      }
+    },
+    "byMonthDay": {
+      "type": "integer",
+      "minimum": -1,
+      "maximum": 31
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "until": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "freq"
+  ]
+}

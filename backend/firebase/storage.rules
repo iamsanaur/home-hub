@@ -1,0 +1,123 @@
+rules_version = '2';
+
+// HomeHub AI — Cloud Storage Security Rules
+// Mirrors Firestore membership: every object lives under households/{hid}/... and
+// access is decided by the caller's Firestore membership document.
+//
+// Layout:
+//   households/{hid}/receipts/{txId}/{file}      finance-permitted adults
+//   households/{hid}/documents/{docId}/{file}     adults; restricted docs follow Firestore allowedUids
+//   households/{hid}/assets/{assetId}/{file}      adults (read: adults + children)
+//   households/{hid}/inventory/{itemId}/{file}    adults
+//   households/{hid}/tasks/{taskId}/{file}        adults, or the task assignee
+//   households/{hid}/notes/{noteId}/{file}        note visibility
+//   users/{uid}/avatar/{file}                     owner only
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() { return request.auth != null; }
+    function memberDoc(hid) {
+      return firestore.get(/databases/(default)/documents/households/$(hid)/members/$(request.auth.uid));
+    }
+    function isMember(hid) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/households/$(hid)/members/$(request.auth.uid))
+        && memberDoc(hid).data.status == 'active';
+    }
+    function roleIn(hid, roles) { return isMember(hid) && memberDoc(hid).data.role in roles; }
+    function isAdultPlus(hid) { return roleIn(hid, ['owner', 'admin', 'adult']); }
+    function isManager(hid) { return roleIn(hid, ['owner', 'admin']); }
+    function canFinance(hid) {
+      return isAdultPlus(hid)
+        && memberDoc(hid).data.get('permissions', {}).get('finance', true) == true;
+    }
+
+    // Upload constraints: 20 MB, safe types only.
+    // Objects are immutable once written: no overwrite through a second "create".
+    function validUpload() {
+      return resource == null
+        && request.resource.size < 20 * 1024 * 1024
+        && (request.resource.contentType.matches('image/(jpeg|png|heic|heif|webp)')
+            || request.resource.contentType == 'application/pdf');
+    }
+    function validImage() {
+      return resource == null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|heic|heif|webp)');
+    }
+
+    match /households/{hid}/receipts/{txId}/{file} {
+      allow read: if canFinance(hid);
+      allow create: if canFinance(hid) && validUpload();
+      allow update: if false;
+      allow delete: if isManager(hid);
+    }
+
+    match /households/{hid}/documents/{docId}/{file} {
+      function docMeta() {
+        return firestore.get(/databases/(default)/documents/households/$(hid)/documents/$(docId)).data;
+      }
+      function docVisible() {
+        return isAdultPlus(hid) && (
+          !firestore.exists(/databases/(default)/documents/households/$(hid)/documents/$(docId))
+          || docMeta().get('restricted', false) == false
+          || request.auth.uid in docMeta().get('allowedUids', [])
+          || isManager(hid));
+      }
+      allow read: if docVisible();
+      allow create: if isAdultPlus(hid) && validUpload();
+      allow update: if false;
+      allow delete: if isManager(hid);
+    }
+
+    match /households/{hid}/assets/{assetId}/{file} {
+      allow read: if isAdultPlus(hid) || roleIn(hid, ['child']);
+      allow create: if isAdultPlus(hid) && validImage();
+      allow update: if false;
+      allow delete: if isAdultPlus(hid);
+    }
+
+    match /households/{hid}/inventory/{itemId}/{file} {
+      allow read: if isAdultPlus(hid);
+      allow create: if isAdultPlus(hid) && validImage();
+      allow update: if false;
+      allow delete: if isAdultPlus(hid);
+    }
+
+    match /households/{hid}/tasks/{taskId}/{file} {
+      function assignedToMe() {
+        return firestore.get(/databases/(default)/documents/households/$(hid)/tasks/$(taskId)).data.get('assigneeUid', '') == request.auth.uid;
+      }
+      allow read: if isAdultPlus(hid) || (isMember(hid) && assignedToMe());
+      allow create: if (isAdultPlus(hid) || (isMember(hid) && assignedToMe())) && validUpload();
+      allow update: if false;
+      allow delete: if isAdultPlus(hid);
+    }
+
+    match /households/{hid}/notes/{noteId}/{file} {
+      function note() {
+        return firestore.get(/databases/(default)/documents/households/$(hid)/notes/$(noteId)).data;
+      }
+      function noteVisible() {
+        return isMember(hid) && (
+          (note().visibility == 'private' && note().createdBy == request.auth.uid)
+          || (note().visibility == 'household' && !roleIn(hid, ['staff'])));
+      }
+      allow read: if noteVisible();
+      allow create: if noteVisible() && validUpload();
+      allow update: if false;
+      allow delete: if isMember(hid) && note().createdBy == request.auth.uid;
+    }
+
+    match /users/{userId}/avatar/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId
+        && (request.resource == null || validImage());
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,77 @@
+name: HomeHub
+options:
+  bundleIdPrefix: com.e404
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    exactVersion: 13.2.0
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+targets:
+  HomeHub:
+    type: application
+    platform: iOS
+    sources:
+      - path: HomeHub
+      # Hermes Mobile ships the same SKILL.md files the server Hermes uses (folder reference keeps layout).
+      - path: ../agents/hermes/skills
+        name: HermesSkills
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.e404.homehub
+        PRODUCT_NAME: HomeHub
+        INFOPLIST_FILE: HomeHub/Info.plist
+        CODE_SIGN_ENTITLEMENTS: HomeHub/HomeHub.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: YES
+        MARKETING_VERSION: 1.0.0
+        CURRENT_PROJECT_VERSION: 1
+    dependencies:
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseFirestore
+      - package: Firebase
+        product: FirebaseStorage
+      - package: Firebase
+        product: FirebaseMessaging
+      - package: Firebase
+        product: FirebaseAppCheck
+  HomeHubTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [HomeHubTests]
+    dependencies:
+      - target: HomeHub
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.e404.homehub.tests
+  HomeHubUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [HomeHubUITests]
+    dependencies:
+      - target: HomeHub
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.e404.homehub.uitests
+        TEST_TARGET_NAME: HomeHub
+schemes:
+  HomeHub:
+    build:
+      targets:
+        HomeHub: all
+    test:
+      targets: [HomeHubTests, HomeHubUITests]

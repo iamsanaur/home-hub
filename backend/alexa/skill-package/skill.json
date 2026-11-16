@@ -1,0 +1,25 @@
+{
+  "_comment": "TEMPLATE. Replace every <PLACEHOLDER> before `ask deploy`. HomeHub is a multi-capability skill: Smart Home (Lambda forwarder) + custom voice intents (HTTPS endpoint). Verify field names against the current ASK skill-manifest schema at deploy time.",
+  "manifest": {
+    "publishingInformation": {
+      "locales": {
+        "en-IN": { "name": "HomeHub", "summary": "Your agentic household manager.", "description": "Control the devices you share from HomeHub, and ask about your shopping list, chores, dinner and today's briefing. HomeHub never stores voice recordings.", "examplePhrases": ["Alexa, ask Home Hub what's on the shopping list", "Alexa, ask Home Hub for my briefing", "Alexa, turn on the living room lamp"], "keywords": ["home", "household", "chores", "shopping"], "smallIconUri": "<SMALL_ICON_URL_108>", "largeIconUri": "<LARGE_ICON_URL_512>" },
+        "en-US": { "name": "HomeHub", "summary": "Your agentic household manager.", "description": "Control the devices you share from HomeHub, and ask about your shopping list, chores, dinner and today's briefing. HomeHub never stores voice recordings.", "examplePhrases": ["Alexa, ask Home Hub what's on the shopping list", "Alexa, ask Home Hub for my briefing", "Alexa, turn on the living room lamp"], "keywords": ["home", "household", "chores", "shopping"], "smallIconUri": "<SMALL_ICON_URL_108>", "largeIconUri": "<LARGE_ICON_URL_512>" }
+      },
+      "isAvailableWorldwide": false,
+      "distributionCountries": ["IN", "US"],
+      "category": "SMART_HOME",
+      "testingInstructions": "Link with the test household account in the certification notes. Devices are HomeHub's simulated demo devices; unlocking by voice is intentionally refused."
+    },
+    "privacyAndCompliance": {
+      "allowsPurchases": false, "usesPersonalInfo": true, "isChildDirected": false, "isExportCompliant": true, "containsAds": false,
+      "locales": { "en-IN": { "privacyPolicyUrl": "<PRIVACY_POLICY_URL>", "termsOfUseUrl": "<TERMS_URL>" }, "en-US": { "privacyPolicyUrl": "<PRIVACY_POLICY_URL>", "termsOfUseUrl": "<TERMS_URL>" } }
+    },
+    "apis": {
+      "smartHome": { "endpoint": { "uri": "<FORWARDER_LAMBDA_ARN>" }, "protocolVersion": "3" },
+      "custom": { "endpoint": { "uri": "https://<REGION>-<PROJECT>.cloudfunctions.net/alexa/skill", "sslCertificateType": "Wildcard" } }
+    },
+    "permissions": [{ "name": "alexa::async_event:write" }],
+    "manifestVersion": "1.0"
+  }
+}

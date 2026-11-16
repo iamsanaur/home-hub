@@ -1,0 +1,71 @@
+# HomeHub — Hermes profile configuration fragment for the `homehub-hermes` profile.
+# Verified against Hermes Agent v0.21.2 (commit 5eb99eb2). Applied by scripts/hermes-install-profile.sh,
+# which merges these keys into ~/.hermes/profiles/homehub-hermes/config.yaml.
+#
+# Secrets are NOT stored here. ${VAR} placeholders resolve from the profile's .env at connect time.
+
+# The household agent only gets: skills (progressive loading), delegation (rare, complex work),
+# todo (planning) and clarify. Everything that could touch the host, the web, or other
+# households' conversations is disabled.
+agent:
+  disabled_toolsets:
+    - terminal
+    - file
+    - browser
+    - code_execution
+    - computer_use
+    - web
+    - search
+    - x_search
+    - image_gen
+    - video_gen
+    - video
+    - tts
+    - vision
+    - spotify
+    - homeassistant
+    - cronjob          # scheduling is owned by Cloud Scheduler + Cloud Functions
+    - kanban
+    - project
+    - coding
+    - debugging
+    - desktop_ui
+    - bot_room
+    - connections
+    - discord
+    - discord_admin
+    - feishu_doc
+    - feishu_drive
+    - memory           # HomeHub keeps permission-scoped memory in Firestore instead
+    - session_search   # one profile serves many households: never search across sessions
+
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+
+skills:
+  write_approval: true       # the agent may not silently rewrite its own skills
+  guard_agent_created: true
+
+# The HomeHub MCP server. The service key proves the caller is this runtime;
+# every tool additionally requires the per-run grant HomeHub puts in the run instructions.
+mcp_servers:
+  homehub:
+    url: "${HOMEHUB_MCP_URL}"
+    headers:
+      Authorization: "Bearer ${HOMEHUB_MCP_SERVICE_KEY}"
+    timeout: 30
+    connect_timeout: 10
+    supports_parallel_tool_calls: false
+
+# Keep MCP tool output small in context.
+tool_budget:
+  mcp_result_size_chars: 12000
+
+# The OpenAI-compatible API server HomeHub's gateway calls. Bind to loopback / a private
+# network only; the gateway is the only client. Model routing stays configurable:
+# HomeHub sends model/provider per request from HERMES_MODEL_SIMPLE / HERMES_MODEL_COMPLEX.
+gateway:
+  platforms:
+    api_server:
+      direct_model_requests: true

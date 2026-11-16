@@ -1,0 +1,140 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "home hub",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "ShoppingListIntent",
+          "slots": [],
+          "samples": [
+            "what's on the shopping list",
+            "what is on my shopping list",
+            "read my shopping list",
+            "what do we need to buy",
+            "what's on the grocery list"
+          ]
+        },
+        {
+          "name": "AddShoppingItemIntent",
+          "slots": [
+            {
+              "name": "item",
+              "type": "AMAZON.Food"
+            }
+          ],
+          "samples": [
+            "add {item}",
+            "add {item} to the shopping list",
+            "put {item} on the list",
+            "we need {item}",
+            "add {item} to the grocery list"
+          ]
+        },
+        {
+          "name": "ChoresIntent",
+          "slots": [],
+          "samples": [
+            "what are my chores",
+            "what are my tasks today",
+            "what do I need to do today",
+            "what's on my to do list"
+          ]
+        },
+        {
+          "name": "DinnerIntent",
+          "slots": [],
+          "samples": [
+            "what's for dinner",
+            "what is for dinner tonight",
+            "what are we eating tonight",
+            "what's tonight's dinner"
+          ]
+        },
+        {
+          "name": "BriefingIntent",
+          "slots": [],
+          "samples": [
+            "give me my briefing",
+            "what's happening today",
+            "today's briefing",
+            "what's my day look like"
+          ]
+        },
+        {
+          "name": "DoorLockedIntent",
+          "slots": [],
+          "samples": [
+            "is the front door locked",
+            "is the door locked",
+            "are the doors locked",
+            "check the locks"
+          ]
+        }
+      ],
+      "types": []
+    },
+    "dialog": {
+      "intents": [
+        {
+          "name": "AddShoppingItemIntent",
+          "confirmationRequired": true,
+          "prompts": {
+            "confirmation": "Confirm.Intent.AddItem"
+          },
+          "slots": [
+            {
+              "name": "item",
+              "type": "AMAZON.Food",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.Item"
+              }
+            }
+          ]
+        }
+      ],
+      "delegationStrategy": "SKILL_RESPONSE"
+    },
+    "prompts": [
+      {
+        "id": "Confirm.Intent.AddItem",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "Add {item} to the shopping list?"
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.Item",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "What should I add?"
+          }
+        ]
+      }
+    ]
+  }
+}

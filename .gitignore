@@ -1,0 +1,50 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+**/google-services.json
+**/GoogleService-Info.plist
+*.keystore
+keystore.properties
+service-account*.json
+**/serviceAccount*.json
+
+# Node
+node_modules/
+backend/firebase/functions/lib/
+*.log
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.firebase/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.kotlin/
+.idea/
+*.iml
+
+# iOS
+ios/build/
+ios/DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Misc
+.DS_Store
+.impeccable/questions/
+.impeccable/mocks/
+.impeccable/review/
+tests/evidence/tmp/
+
+# Functions emulator local secrets
+backend/firebase/functions/.secret.local
+backend/firebase/functions/.env.local
+android/app/src/main/assets/hermes/
+
+# Real Firebase project configs (copied into the apps by scripts/use-firebase.sh)
+config/firebase/
+config/alexa/
