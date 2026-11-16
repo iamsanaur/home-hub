@@ -22,4 +22,4 @@ case "${1:-}" in
     ;;
   *) echo "usage: $0 prod|emulator" >&2; exit 2 ;;
 esac
-(cd "$ROOT/ios" && xcodegen generate >/dev/null) && echo "Regenerated the Xcode project."
+if command -v xcodegen >/dev/null; then (cd "$ROOT/ios" && xcodegen generate >/dev/null) && echo "Regenerated the Xcode project."; fi

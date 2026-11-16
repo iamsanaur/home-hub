@@ -8,12 +8,13 @@
 # Replace a placeholder later with:  firebase functions:secrets:set MODEL_API_KEY --project prod
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$ROOT/scripts/dev-env.sh" >/dev/null
+source "$ROOT/scripts/lib/common.sh"
+find_tools
 cd "$ROOT/backend/firebase"
 P=prod
 
-has_secret() { firebase functions:secrets:access "$1" --project "$P" >/dev/null 2>&1; }
-set_secret() { printf '%s' "$2" | firebase functions:secrets:set "$1" --data-file - --project "$P" --force >/dev/null; echo "  set $1"; }
+has_secret() { fb functions:secrets:access "$1" --project "$P" >/dev/null 2>&1; }
+set_secret() { printf '%s' "$2" | fb functions:secrets:set "$1" --data-file - --project "$P" --force >/dev/null; echo "  set $1"; }
 
 echo "Secrets"
 for s in HOMEHUB_MCP_SERVICE_KEY ALEXA_FORWARDER_SECRET; do
@@ -27,4 +28,4 @@ echo "Building functions"
 (cd functions && npm ci --silent && npm run build --silent)
 
 echo "Deploying"
-firebase deploy --only "firestore,storage,functions" --project "$P" --non-interactive "$@"
+fb deploy --only "firestore,storage,functions" --project "$P" --non-interactive "$@"

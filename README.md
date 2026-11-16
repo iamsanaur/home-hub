@@ -245,7 +245,7 @@ backend/firebase/   Firestore + Storage rules, indexes, Cloud Functions (gateway
 agents/hermes/      Orchestrator profile, SOUL.md, 8 on-demand skills, Docker stack
 shared/schemas/     JSON Schemas generated from the server's zod contracts
 docs/               Architecture, security, setup, plugin SDK, certification, design system
-scripts/            Dev environment, deploy, Hermes-in-Docker, plugin manifest validator
+scripts/            quickstart, setup wizard, doctor, Android/iOS run scripts, deploy, Hermes-in-Docker
 tests/evidence/     Screenshots captured from emulators and simulators
 ```
 
@@ -280,30 +280,23 @@ A test fails if a skill names a tool that doesn't exist or any tool is unreachab
 
 ---
 
-## Run it locally — no credentials needed
+## Quick start
 
 ```bash
-# 1. Backend + emulators
-source scripts/dev-env.sh
-cd backend/firebase/functions && npm ci && npm run build
-cd .. && firebase emulators:start --project demo-homehub
+git clone https://github.com/iamsanaur/home-hub.git && cd home-hub
 
-# 2. Sample household (owner@homehub.test · password homehub-demo-1)
-cd functions && FIRESTORE_EMULATOR_HOST=127.0.0.1:8181 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
-  GCLOUD_PROJECT=demo-homehub node lib/scripts/seed.js
+scripts/quickstart.sh            # try it locally: no accounts, no keys, no cost
+scripts/build-android.sh run     # …on an Android emulator
+scripts/run-ios.sh               # …or in the iPhone simulator (Mac)
 
-# 3. Android            4. iOS
-cd android && ./gradlew :app:installDebug
-cd ios && xcodegen generate && open HomeHub.xcodeproj
+scripts/setup.sh                 # run it for real on your own Firebase project (guided, re-runnable)
 ```
 
-**Prerequisites:** Node ≥ 22.12 · Firebase CLI · JDK 21+ · Android SDK 37 · Xcode with iOS 26+ simulators · `xcodegen`.
-**Optional:** Hermes Agent v0.21.2 for the server runtime (`scripts/hermes-docker.sh`). Without a model provider, deterministic
-commands and every non-AI feature still work.
+`scripts/doctor.sh` tells you what to install if anything is missing. The full walk-through — what each step does,
+what it costs, and troubleshooting — is in [`docs/getting-started.md`](docs/getting-started.md).
 
-> **Bring your own Firebase.** `google-services.json`, `GoogleService-Info.plist`, release keystores and `.env` files are
-> deliberately **not** in this repo. Copy `.env.example`, create a Firebase project, and see
-> [`docs/firebase-setup.md`](docs/firebase-setup.md) and [`docs/deployment.md`](docs/deployment.md).
+> **Bring your own Firebase.** `google-services.json`, `GoogleService-Info.plist`, release keys and `.env` files are
+> deliberately **not** in this repo; `scripts/setup.sh` creates them for your project.
 
 ### Tests
 
@@ -322,7 +315,7 @@ every assistant tool have automated tests.
 
 ## Docs
 
-[Architecture](docs/architecture.md) · [Security](docs/security.md) · [Firebase setup](docs/firebase-setup.md) ·
+[Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Security](docs/security.md) · [Firebase setup](docs/firebase-setup.md) ·
 [Hermes setup](docs/hermes-setup.md) · [Deployment](docs/deployment.md) · [Alexa](docs/alexa.md) ·
 [Plugin SDK](docs/plugin-sdk.md) · [Plugin certification](docs/plugin-certification.md) ·
 [Design tokens](docs/design-tokens.md) · [Accessibility checklist](docs/accessibility-checklist.md)

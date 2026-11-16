@@ -54,3 +54,6 @@ dist/
 
 # Per-deployment Firebase project aliases (copy .firebaserc.example)
 backend/firebase/.firebaserc
+
+# Local setup logs
+.logs/

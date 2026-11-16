@@ -8,6 +8,8 @@ Requires JDK 21+ and Node ≥ 22.12 (`source scripts/dev-env.sh`). Functions rea
 Apps detect the missing config file and connect to the emulators automatically (Android: `10.0.2.2`; iOS simulator: `127.0.0.1`).
 
 ## Production project
+> The quick way: run `scripts/setup.sh` — it does all of this for you (see [`getting-started.md`](getting-started.md)). The manual steps below are the reference.
+
 1. Create a Firebase project; enable Auth (Email/Password; add federated providers as needed), Firestore (Native), Storage, Cloud Messaging, App Check.
 2. Region: functions default to `asia-south1` (`src/index.ts` → `setGlobalOptions`). Use the same region for Firestore if data residency matters.
 3. Register apps with bundle/package `com.e404.homehub`; download `google-services.json` → `android/app/`, `GoogleService-Info.plist` → `ios/HomeHub/` (both git-ignored).
