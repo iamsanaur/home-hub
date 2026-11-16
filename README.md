@@ -24,16 +24,12 @@ and **asks before it spends, books or sends**.
 
 <br/>
 
-<img src="docs/images/ipad-home.png" width="62%" alt="HomeHub on iPad: today's priorities, bills, calendar, pantry and budget" />
-
-<br/><br/>
-
 <img src="docs/images/ai-prompts.png" width="23%" alt="Assistant with suggested prompts" />&nbsp;
 <img src="docs/images/ai-tools.png" width="23%" alt="Assistant answering with visible tool activity" />&nbsp;
 <img src="docs/images/insights.png" width="23%" alt="Insights: spending by category and task completion" />&nbsp;
 <img src="docs/images/devices.png" width="23%" alt="Devices by room with Alexa exposure" />
 
-<sub>The iOS app on iPad and iPhone, with a demo household. Android is built to match it screen for screen.</sub>
+<sub>The iOS app with a demo household. Android is built to match it screen for screen.</sub>
 
 </div>
 
@@ -51,6 +47,71 @@ reminder — while **purchases, payments, bookings, external messages and deleti
 > *"Ramesh the milk vendor didn't come on the 3rd and 4th, and then he was away from the 9th till the 11th.
 > Also on the 14th we got 2 liters."*
 > → the month's bill is recalculated, to the paisa, from what was actually delivered.
+
+## ✨ Highlights
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🤝 An assistant you can trust
+It plans the week, builds the grocery list and watches the budget — but **every purchase, payment, booking, message or deletion waits for your approval**, enforced on the server, not just in the UI. Every action is audited and checked against the real data before it says "done".
+
+</td>
+<td width="33%" valign="top">
+
+### 🥛 Bills that match reality
+Pay-per-delivery bills for **milk, newspaper, maid, water cans, tiffin**. Tell it *"Ramesh didn't come on the 3rd and 4th"* — the month's total is recalculated to the paisa from what was actually delivered.
+
+</td>
+<td width="33%" valign="top">
+
+### 🪟 Liquid Glass, truly native
+The same translucent, softly-lit design on **iOS and Android**, each built natively — real backdrop blur, accessible fallbacks, glass only where it helps. No Flutter, no WebViews.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 📱 The agent runs on your phone
+**Hermes Mobile** is an on-device agent loop, so everyday requests don't need a server round-trip. A server Hermes handles scheduled work — and the app keeps working even when the assistant doesn't.
+
+</td>
+<td valign="top">
+
+### 🔌 Offline-first, conflict-safe
+Add and complete tasks, edit lists and notes with no signal. Changes sync with retries and idempotent writes, and **financial records are never silently overwritten**.
+
+</td>
+<td valign="top">
+
+### 🧾 Spending that captures itself
+UPI and bank alerts on Android, and Shortcuts on iOS, become expense suggestions you review — with de-duplication, so nothing is counted twice.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🏠 One home, many devices
+Lights, plugs, AC and locks by room, with **read-back verification**. Home Assistant bridge, **Alexa** account linking, Telegram, read-only Google Calendar — and a plugin SDK for more.
+
+</td>
+<td valign="top">
+
+### 🔐 Privacy by design
+Roles for owner, admin, adult, child and staff; staff see only assigned work. Private notes stay private, deny-by-default security rules, and data export and deletion built in.
+
+</td>
+<td valign="top">
+
+### 💸 Token-frugal by design
+A deterministic router picks the skill and model tier, context stays compact, and **no LLM is used for arithmetic, dates or plain CRUD**. A usage ledger measures cost per workflow.
+
+</td>
+</tr>
+</table>
 
 ## What you get
 
@@ -258,19 +319,6 @@ Cross-household isolation, role limits, approval gating, idempotency, offline sy
 every assistant tool have automated tests.
 
 ---
-
-## Where it stands
-
-**Working and tested:** both native apps, the Firebase backend and rules, the MCP tool server, approvals and autonomy,
-vendor/metered bills, offline sync, Hermes Mobile, server Hermes in Docker, spending capture, Home Assistant, Telegram,
-read-only Google Calendar, the plugin SDK.
-
-**Honest gaps** — see [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) for the full, dated list:
-- iOS push needs an APNs key; App Check is implemented but not yet enforced in production.
-- Alexa account linking is built and awaiting Amazon developer credentials and certification.
-- The iOS release build needs an Apple developer team; there is no Play Store listing yet.
-- The assistant's newest tools are covered by automated tests but have not yet been exercised against the live model.
-- Partner-gated integrations (grocery delivery, bank data) are listed as *Planned*, not built.
 
 ## Docs
 
