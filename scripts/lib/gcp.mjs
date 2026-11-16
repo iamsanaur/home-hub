@@ -3,6 +3,7 @@
 // nothing stored): it mints a short-lived access token from the CLI's refresh token and calls a few Google APIs.
 //
 //   node scripts/lib/gcp.mjs billing-status <project>        -> prints "enabled" | "disabled"
+//   node scripts/lib/gcp.mjs billing-account <project>       -> prints the billing account id the project uses
 //   node scripts/lib/gcp.mjs billing-accounts                -> prints "<id>\t<name>" for each open billing account
 //   node scripts/lib/gcp.mjs billing-link <project> <acct>   -> links the project to a billing account
 //   node scripts/lib/gcp.mjs enable-apis <project>           -> enables the Google APIs HomeHub needs
@@ -52,6 +53,10 @@ if (cmd === "billing-status") {
   const r = await call(tok, "GET", `https://cloudbilling.googleapis.com/v1/projects/${a}/billingInfo`);
   if (!r.ok) die(`Could not read billing for ${a}: ${msg(r)}`);
   console.log(r.json.billingEnabled ? "enabled" : "disabled");
+} else if (cmd === "billing-account") {
+  const r = await call(tok, "GET", `https://cloudbilling.googleapis.com/v1/projects/${a}/billingInfo`);
+  if (!r.ok) die(`Could not read billing for ${a}: ${msg(r)}`);
+  console.log((r.json.billingAccountName ?? "").replace("billingAccounts/", ""));
 } else if (cmd === "billing-accounts") {
   const r = await call(tok, "GET", "https://cloudbilling.googleapis.com/v1/billingAccounts");
   if (!r.ok) die(`Could not list billing accounts: ${msg(r)}`);
