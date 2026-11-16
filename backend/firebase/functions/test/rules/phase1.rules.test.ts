@@ -47,6 +47,20 @@ describe("phase 1 rules: server-written, policy-gated collections", () => {
     await assertFails(setDoc(doc(as("ownerA"), `households/${A}/auditEvents/forged`), { actorUid: "ownerA" }));
     await assertFails(updateDoc(doc(as("ownerA"), `pluginCatalog/homehub.demo-devices`), { killSwitch: true }));
   });
+  it("captured spending is readable only by finance-permitted members of the household, and never client-written", async () => {
+    await env.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), `households/${A}/spendCaptures/c1`), { status: "pending", amountMinor: 45000, currency: "INR" });
+      await setDoc(doc(c.firestore(), `households/${A}/spendRules/r1`), { merchant: "Swiggy", category: "Dining" });
+    });
+    await assertSucceeds(getDoc(doc(as("ownerA"), `households/${A}/spendCaptures/c1`)));
+    await assertSucceeds(getDoc(doc(as("adultA"), `households/${A}/spendRules/r1`)));
+    await assertFails(getDoc(doc(as("childA"), `households/${A}/spendCaptures/c1`)));
+    await assertFails(getDoc(doc(as("staffA"), `households/${A}/spendCaptures/c1`)));
+    await assertFails(getDoc(doc(as("ownerB"), `households/${A}/spendCaptures/c1`)));
+    await assertFails(setDoc(doc(as("ownerA"), `households/${A}/spendCaptures/forged`), { status: "pending", amountMinor: 1 }));
+    await assertFails(updateDoc(doc(as("ownerA"), `households/${A}/spendCaptures/c1`), { status: "confirmed" }));
+    await assertFails(setDoc(doc(as("ownerA"), `households/${A}/spendRules/r2`), { merchant: "X", category: "Rent" }));
+  });
   it("children and staff never see physical-safety devices", async () => {
     await assertSucceeds(getDoc(doc(as("childA"), `households/${A}/devices/lamp`)));
     await assertFails(getDoc(doc(as("childA"), `households/${A}/devices/door`)));

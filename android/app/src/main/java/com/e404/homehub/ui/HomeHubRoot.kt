@@ -91,6 +91,7 @@ import com.e404.homehub.ui.screens.ChannelsScreen
 import com.e404.homehub.ui.screens.AgentsScreen
 import com.e404.homehub.ui.screens.ActivityScreen
 import com.e404.homehub.ui.screens.PrivacyScreen
+import com.e404.homehub.ui.screens.SpendReviewScreen
 import com.e404.homehub.ui.screens.DocumentsScreen
 import com.e404.homehub.ui.screens.FamilyScreen
 import com.e404.homehub.ui.screens.FinanceScreen
@@ -119,7 +120,7 @@ object Routes {
     const val CALENDAR = "calendar"; const val DOCUMENTS = "documents"; const val NOTES = "notes"; const val APPROVALS = "approvals"
     const val NOTIFICATIONS = "notifications"; const val SETTINGS = "settings"; const val CONFLICTS = "conflicts"
     const val CONNECTIONS = "connections"; const val MODEL_ACCOUNTS = "model-accounts"; const val INTEGRATIONS = "integrations"; const val DEVICES = "devices"
-    const val AUTOMATIONS = "automations"; const val CHANNELS = "channels"; const val AGENTS = "agents"; const val ACTIVITY = "activity"; const val PRIVACY = "privacy"
+    const val AUTOMATIONS = "automations"; const val CHANNELS = "channels"; const val AGENTS = "agents"; const val ACTIVITY = "activity"; const val PRIVACY = "privacy"; const val SPEND_REVIEW = "spend-review"
 }
 
 /** App-wide services available to screens. */
@@ -226,6 +227,7 @@ private fun MainShell(vm: AppViewModel, deepLink: String?, onDeepLinkHandled: ()
                     composable(Routes.AGENTS) { AgentsScreen() }
                     composable(Routes.ACTIVITY) { ActivityScreen() }
                     composable(Routes.PRIVACY) { PrivacyScreen() }
+                    composable(Routes.SPEND_REVIEW) { SpendReviewScreen() }
                     composable("${Routes.AI}/{prompt}", arguments = listOf(navArgument("prompt") { type = NavType.StringType })) { AiScreen(initialPrompt = it.arguments?.getString("prompt")) }
                 }
                 // Functional layer: floating glass navigation (compact widths only).

@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import com.e404.homehub.ui.components.HomeHubListTile
+import com.e404.homehub.ui.Routes
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
@@ -96,11 +99,20 @@ fun FinanceScreen() {
     }.collectAsStateWithLifecycle(Loadable.Loading)
     val budgets by remember(h.hid, month) { graph.data.observe(h.hid, "budgets", { it.whereEqualTo("period", month) }, Budget::from) }.collectAsStateWithLifecycle(Loadable.Loading)
 
-    ListScreen("Finance", fabIcon = Icons.Outlined.Add, fabLabel = "Add transaction", onFab = { adding = true }, actions = {
+    val toReview by remember(h.hid) { graph.data.records(h.hid, "spendCaptures") { it.whereEqualTo("status", "pending").limit(50) } }.collectAsStateWithLifecycle(Loadable.Loading)
+    val nav = com.e404.homehub.ui.LocalActions.current
+    ListScreen("Finance", subtitle = ym.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())), fabIcon = Icons.Outlined.Add, fabLabel = "Add transaction", onFab = { adding = true }, actions = {
         HomeHubIconButton(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "Previous month", { month = ym.minusMonths(1).toString() }, tint = c.ink)
         HomeHubIconButton(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "Next month", { month = ym.plusMonths(1).toString() }, tint = c.ink, enabled = ym < YearMonth.now(h.zone))
     }) {
-        item { Text(ym.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())), style = t.sectionTitle, color = c.ink, modifier = Modifier.padding(vertical = Space.xs)) }
+        // Automatically captured payments waiting for a decision (Settings → Automatic spending).
+        val pendingCount = (toReview as? Loadable.Ready)?.value?.size ?: 0
+        if (pendingCount > 0) item {
+            HomeHubCard(Modifier.padding(top = Space.sm), onClick = { nav.go(Routes.SPEND_REVIEW) }, padding = androidx.compose.foundation.layout.PaddingValues(vertical = Space.xs)) {
+                HomeHubListTile("$pendingCount payment${if (pendingCount > 1) "s" else ""} to review", subtitle = "Captured automatically — confirm to add them", leadingIcon = Icons.Outlined.Inbox, chevron = true)
+            }
+        }
+        item { Spacer(Modifier.height(Space.sm)) }
         when (val tx = txns) {
             Loadable.Loading -> item { LoadingSkeleton() }
             is Loadable.Failed -> item { ErrorState(tx.message) }

@@ -237,6 +237,15 @@ service cloud.firestore {
       }
 
       // ---------- finance (private to finance-permitted adults) ----------
+      // Automatic spending capture: written only by the gateway (parsed fields, never raw message text).
+      match /spendCaptures/{captureId} {
+        allow read: if canFinance(hid);
+        allow write: if false;
+      }
+      match /spendRules/{ruleId} {
+        allow read: if canFinance(hid);
+        allow write: if false;
+      }
       match /transactions/{txId} {
         function txShape(d) {
           return d.type in ['income', 'expense'] && isMinor(d.amountMinor) && d.amountMinor > 0

@@ -13,6 +13,7 @@ struct FinanceView: View {
     @State private var txns: LiveQuery<Record>?
     @State private var budgets: LiveQuery<Record>?
     @State private var adding = false
+    @State private var toReview: LiveQuery<Record>?
 
     var body: some View {
         if let h = hOpt {
@@ -26,6 +27,14 @@ struct FinanceView: View {
                 let overall = bud.first { $0.s("category") == "*" }?.i("limitMinor")
                 let byCat = Dictionary(grouping: own.filter { $0.s("type") == "expense" }, by: { $0.s("category") ?? "Other" }).mapValues { $0.reduce(Int64(0)) { $0 + ($1.i("amountMinor") ?? 0) } }.sorted { $0.value > $1.value }
                 Screen(title: "Finance", subtitle: month.formatted(.dateTime.month(.wide).year())) {
+                    // Automatically captured payments waiting for a decision (Settings → Automatic spending).
+                    let pending = toReview?.items.count ?? 0
+                    if pending > 0 {
+                        NavigationLink { SpendReviewView() } label: {
+                            HHCard { HHListRow(title: "\(pending) payment\(pending == 1 ? "" : "s") to review", subtitle: "Captured automatically — confirm to add them", systemImage: "tray.full",
+                                               trailing: AnyView(Image(systemName: "chevron.right").foregroundStyle(HH.inkTertiary))) }
+                        }.buttonStyle(.plain).padding(.bottom, Space.sm)
+                    }
                     if case .loading = txns?.state ?? .loading { LoadingSkeleton() } else {
                         HHCard {
                             BudgetSummaryView(spent: spent, limit: overall, income: income, currency: h.currency)
@@ -75,6 +84,7 @@ struct FinanceView: View {
                 }
                 .sheet(isPresented: $adding) { AddTransaction(h: h).presentationDetents([.large]) }
                 .task(id: month) {
+                    if toReview == nil { toReview = LiveQuery(Firestore.firestore().collection("households/\(h.hid)/spendCaptures").whereField("status", isEqualTo: "pending").limit(to: 50)) { Record(id: $0, data: $1) } }
                     let end = Calendar.current.date(byAdding: .month, value: 1, to: month)!
                     txns = LiveQuery(Firestore.firestore().collection("households/\(h.hid)/transactions").whereField("occurredAt", isGreaterThanOrEqualTo: Timestamp(date: month))
                         .whereField("occurredAt", isLessThan: Timestamp(date: end)).order(by: "occurredAt", descending: true)) { Record(id: $0, data: $1) }

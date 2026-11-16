@@ -23,6 +23,7 @@ import { handleModelCall, ModelProxyConfig } from "../agent/modelProxy";
 import { claimJobForDevice } from "../services/jobs";
 import { completeProviderOAuth, oauthResultPage } from "../plugins/modelAccounts";
 import { mountPhase1Routes } from "./phase1Routes";
+import { mountSpendRoutes } from "../finance/spendCapture";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -261,6 +262,7 @@ export function createGatewayApp(deps: GatewayDeps) {
   }));
 
   mountPhase1Routes(app, ctx, wrap, () => deps.modelProxy?.() ?? null);
+  mountSpendRoutes(app, ctx, wrap);
 
   app.use((_req: Request, res: Response) => res.status(404).json({ error: { code: "not_found", message: "Unknown endpoint" } }));
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

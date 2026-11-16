@@ -271,6 +271,7 @@ struct SettingsView: View {
                         }
                     }
                 }
+                SpendCaptureSettingsSection(h: h)
                 SectionHeader(title: "Notifications")
                 GroupedList {
                     ForEach(Array([("tasks", "Tasks"), ("bills", "Bills"), ("pantry", "Pantry"), ("maintenance", "Maintenance"), ("approvals", "Approvals"), ("agent", "Assistant"), ("briefing", "Daily briefing")].enumerated()), id: \.offset) { i, c in

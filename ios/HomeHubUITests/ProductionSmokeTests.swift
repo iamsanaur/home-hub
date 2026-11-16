@@ -56,6 +56,36 @@ final class ProductionSmokeTests: XCTestCase {
         sleep(1); attach(app, "prod-connections")
     }
 
+    /// Finance → "to review" card → confirm one captured payment (seeded through the API beforehand).
+    func testSpendReviewConfirm() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let email = env["HH_EMAIL"], let password = env["HH_PASSWORD"] else { throw XCTSkip("No production test credentials supplied") }
+        let app = XCUIApplication()
+        app.launch()
+        if app.buttons["Sign in"].waitForExistence(timeout: 10) {
+            app.buttons["Sign in"].tap()
+            let field = app.textFields["Email"]; XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap(); field.typeText(email)
+            let pw = app.secureTextFields["Password"]; pw.tap(); pw.typeText(password)
+            app.buttons["Sign in"].firstMatch.tap()
+        }
+        XCTAssertTrue(app.buttons["Manage"].firstMatch.waitForExistence(timeout: 40))
+        let notNow = app.buttons["Not Now"]; if notNow.waitForExistence(timeout: 3) { notNow.tap() }
+        app.buttons["Manage"].firstMatch.tap()
+        let finance = app.staticTexts["Spending, income and budgets"]
+        for _ in 0..<6 where !(finance.exists && finance.isHittable) { app.swipeUp() }
+        finance.tap()
+        let card = app.staticTexts.matching(NSPredicate(format: "label ENDSWITH 'to review'")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 20), "No 'to review' card on Finance")
+        attach(app, "spend-finance-card")
+        card.tap()
+        XCTAssertTrue(app.staticTexts["Uber India"].waitForExistence(timeout: 20), "Captured payment not listed")
+        attach(app, "spend-review")
+        app.buttons["Add expense"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Nothing to review"].waitForExistence(timeout: 20), "Confirm didn't clear the item")
+        attach(app, "spend-review-done")
+    }
+
     /// Screenshots of the five primary tabs, for Android/iOS visual parity reviews.
     func testCapturePrimaryTabs() throws {
         let env = ProcessInfo.processInfo.environment

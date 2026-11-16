@@ -3,4 +3,5 @@
     <string name="app_name">HomeHub</string>
     <string name="notification_channel_household">Household</string>
     <string name="notification_channel_approvals">Approvals</string>
+    <string name="spend_capture_label">HomeHub spending capture</string>
 </resources>

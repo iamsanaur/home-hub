@@ -32,6 +32,7 @@ class AppGraph private constructor(context: Context) {
     val data = HouseholdDataRepository(firestore) { auth.currentUser?.uid }
     val agent = AgentRepository(firestore, gateway)
     val connect = com.e404.homehub.data.repo.ConnectRepository(gateway)
+    val spend = com.e404.homehub.spend.SpendRepository(gateway)
     val syncEngine = SyncEngine(firestore, database.dao(), { auth.currentUser?.uid })
     /** Hermes Mobile — the on-device agent runtime. Skills are the same SKILL.md files the server Hermes uses. */
     val hermes by lazy { HermesMobile(appContext, gateway, HermesMobile.loadSkills(appContext)) }

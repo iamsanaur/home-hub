@@ -402,6 +402,7 @@ fun SettingsScreen() {
                 }
             }
         }
+        item { SpendCaptureSettings() }
         item {
             Column {
                 SectionHeader("Notifications")
