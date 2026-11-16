@@ -24,12 +24,16 @@ and **asks before it spends, books or sends**.
 
 <br/>
 
-<img src="docs/images/home.png" width="23%" alt="Home" />&nbsp;
-<img src="docs/images/manage.png" width="23%" alt="Manage" />&nbsp;
-<img src="docs/images/assistant.png" width="23%" alt="Assistant" />&nbsp;
-<img src="docs/images/finance.png" width="23%" alt="Finance" />
+<img src="docs/images/ipad-home.png" width="62%" alt="HomeHub on iPad: today's priorities, bills, calendar, pantry and budget" />
 
-<sub>iOS, running against the Firebase emulators and production. Android is built to match it screen for screen.</sub>
+<br/><br/>
+
+<img src="docs/images/ai-prompts.png" width="23%" alt="Assistant with suggested prompts" />&nbsp;
+<img src="docs/images/ai-tools.png" width="23%" alt="Assistant answering with visible tool activity" />&nbsp;
+<img src="docs/images/insights.png" width="23%" alt="Insights: spending by category and task completion" />&nbsp;
+<img src="docs/images/devices.png" width="23%" alt="Devices by room with Alexa exposure" />
+
+<sub>The iOS app on iPad and iPhone, with a demo household. Android is built to match it screen for screen.</sub>
 
 </div>
 
