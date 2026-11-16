@@ -11,6 +11,7 @@ and **asks before it spends, books or sends**.
 
 <br/>
 
+[![Download APK](https://img.shields.io/github/v/release/iamsanaur/home-hub?style=for-the-badge&label=Download%20APK&color=176B45&logo=android&logoColor=white)](https://github.com/iamsanaur/home-hub/releases/latest)
 ![Android](https://img.shields.io/badge/Android-Kotlin%20%C2%B7%20Jetpack%20Compose-176B45?style=for-the-badge&logo=android&logoColor=white)
 ![iOS](https://img.shields.io/badge/iOS-Swift%20%C2%B7%20SwiftUI-18231D?style=for-the-badge&logo=apple&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-Firestore%20%C2%B7%20Functions-D6A344?style=for-the-badge&logo=firebase&logoColor=white)
@@ -218,6 +219,12 @@ A test fails if a skill names a tool that doesn't exist or any tool is unreachab
 </details>
 
 ---
+
+## Download
+
+**Android:** grab the signed APK from the [latest release](https://github.com/iamsanaur/home-hub/releases/latest)
+(Android 8.0+; Play Protect may warn because it isn't on Google Play yet — verify the SHA-256 shown on the release).
+**iOS:** build from source for now; a signed build needs an Apple developer team. See the [changelog](CHANGELOG.md).
 
 ## Run it locally — no credentials needed
 
