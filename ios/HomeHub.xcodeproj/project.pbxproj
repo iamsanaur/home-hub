@@ -22,7 +22,6 @@
 		40ED96791B1A32D00DECE84D /* NotificationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1E1E686A9100E71ADEF454 /* NotificationPrompt.swift */; };
 		488565752D0996FC66C926CB /* ConnectionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E010EB7DBA75CC1591B89A /* ConnectionsTests.swift */; };
 		62C3863A090972B3FD3DCBEB /* VendorBills.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07FD0DE2C07236ECD248FA1D /* VendorBills.swift */; };
-		664E0A9A1D168A3D974FF2F0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BACC9F6AB795DB4E0BFCB36B /* GoogleService-Info.plist */; };
 		67B4256E9B83C9CE5661B21D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 992C0967272AB26619444709 /* Models.swift */; };
 		70DF41316A00641133C15A0E /* Money.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC4AD28ABA569D23C87E6A9 /* Money.swift */; };
 		72A51312B0D791FF99BC5DDD /* SpendCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89318DFAE4FDFB2DBA1A3820 /* SpendCapture.swift */; };
@@ -106,7 +105,6 @@
 		A1F23A4292D72BCA5511FB3B /* BulkPantry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkPantry.swift; sourceTree = "<group>"; };
 		A3C1D9A149A12CC9AF610786 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A9E85B7AC5BCA9421CB295F4 /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
-		BACC9F6AB795DB4E0BFCB36B /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		C03835B534283FF3F282ECFA /* HomeHub.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HomeHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CCFE5CA2AF54A85D8B2A028A /* HomeHubTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HomeHubTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CEC4AD28ABA569D23C87E6A9 /* Money.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Money.swift; sourceTree = "<group>"; };
@@ -274,7 +272,6 @@
 		DBCD60E8AFAF609EEC758B10 /* HomeHub */ = {
 			isa = PBXGroup;
 			children = (
-				BACC9F6AB795DB4E0BFCB36B /* GoogleService-Info.plist */,
 				291904E21323E8F8CFF20A5A /* HomeHub.entitlements */,
 				297856558B145DE237D04917 /* Info.plist */,
 				4508AE6DF7AD1E3250725AC6 /* App */,
@@ -407,7 +404,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				85B0EDB46E6B4EC76DF30065 /* Assets.xcassets in Resources */,
-				664E0A9A1D168A3D974FF2F0 /* GoogleService-Info.plist in Resources */,
 				1F45EB0A78FAFA97D2CBB756 /* HermesSkills in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

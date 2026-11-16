@@ -10,7 +10,7 @@ else rm -f HomeHub/GoogleService-Info.plist; info "No Firebase project configure
 step "Generating the Xcode project"; xcodegen generate >/dev/null
 SIM="${HOMEHUB_SIMULATOR:-$(xcrun simctl list devices available | /usr/bin/grep -E "iPhone [0-9]+( Pro)? \(" | tail -1 | sed -E 's/^ *(.*) \(([0-9A-F-]{36})\).*/\2/')}"
 [[ -n "$SIM" ]] || die "No iPhone simulator found. Open Xcode → Settings → Platforms and install an iOS runtime."
-xcrun simctl boot "$SIM" 2>/dev/null || true; open -a Simulator
+xcrun simctl boot "$SIM" 2>/dev/null || true; (open -a Simulator 2>/dev/null || open "$(xcode-select -p)/Applications/Simulator.app" 2>/dev/null || true)
 step "Building (first time takes a few minutes)"
 xcodebuild -project HomeHub.xcodeproj -scheme HomeHub -destination "id=$SIM" -derivedDataPath build/dd -quiet build || die "Build failed"
 APP="$(find build/dd/Build/Products -maxdepth 2 -name 'HomeHub.app' | head -1)"
