@@ -179,6 +179,10 @@ class AgentViewModel(app: Application) : AndroidViewModel(app) {
 
     fun stop() { job?.cancel() }
 
+    /** Tool-usage entries are a display of what the assistant did; removing them doesn't undo anything. */
+    fun removeTool(name: String) = _ui.update { s -> s.copy(live = s.live?.copy(steps = s.live.steps.filterNot { it.name == name && it.done })) }
+    fun clearTools() = _ui.update { s -> s.copy(live = s.live?.copy(steps = emptyList())) }
+
     private fun onEvent(e: AgentEvent) = _ui.update { s ->
         val live = s.live ?: return@update s
         s.copy(live = when (e) {
@@ -290,7 +294,7 @@ fun AiScreen(initialPrompt: String? = null) {
                     if (idx >= 0) history.subList(0, idx) else history
                 } ?: history
                 items(shownHistory, key = { it.id }) { m -> Box(Modifier.widthIn(max = 720.dp).fillMaxWidth()) { HistoryBubble(m, h) } }
-                ui.live?.let { live -> item(key = "live") { Box(Modifier.widthIn(max = 720.dp).fillMaxWidth()) { LiveRunView(live, h, onRetry = { vm.send(h, live.prompt) }) } } }
+                ui.live?.let { live -> item(key = "live") { Box(Modifier.widthIn(max = 720.dp).fillMaxWidth()) { LiveRunView(live, h, onRetry = { vm.send(h, live.prompt) }, onRemoveTool = vm::removeTool, onClearTools = vm::clearTools) } } }
             }
             // Functional layer: the composer floats as a glass control over the conversation.
             if (canUse) GlassSurface(
@@ -348,7 +352,7 @@ private fun HistoryBubble(m: AgentMessage, h: HouseholdContext) {
 }
 
 @Composable
-private fun LiveRunView(live: LiveRun, h: HouseholdContext, onRetry: () -> Unit) {
+private fun LiveRunView(live: LiveRun, h: HouseholdContext, onRetry: () -> Unit, onRemoveTool: (String) -> Unit, onClearTools: () -> Unit) {
     val c = HomeHubTheme.colors
     val t = HomeHubTheme.type
     val graph = AppGraph.get(LocalContext.current)
@@ -366,8 +370,7 @@ private fun LiveRunView(live: LiveRun, h: HouseholdContext, onRetry: () -> Unit)
             live.notes.forEach { Text(it, style = t.caption, color = c.inkSecondary) }
             if (live.steps.isNotEmpty()) {
                 Spacer(Modifier.size(Space.xs))
-                Text("Tool activity", style = t.caption, color = c.inkSecondary)
-                AgentActivityTimeline(live.steps, Modifier.padding(top = 4.dp))
+                AgentActivityTimeline(live.steps, onRemove = onRemoveTool, onClear = onClearTools)
             }
             if (live.text.isNotBlank()) {
                 Spacer(Modifier.size(Space.sm))

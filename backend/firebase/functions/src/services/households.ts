@@ -230,3 +230,20 @@ export function isValidTimezone(tz: string): boolean {
     return false;
   }
 }
+
+/**
+ * Changes how a person is shown everywhere: their user profile and every household membership.
+ * (The route also updates the Firebase Auth profile so new sign-ins and tokens carry the same name.)
+ */
+export async function updateDisplayName(ctx: Ctx, uid: string, rawName: string): Promise<{ displayName: string; households: number }> {
+  const displayName = rawName.replace(/\s+/g, " ").trim();
+  // eslint-disable-next-line no-control-regex
+  if (displayName.length < 1 || displayName.length > 80 || /[\u0000-\u001f\u007f<>]/.test(displayName)) throw invalid("Name must be 1–80 characters");
+  const now = ts(ctx.now());
+  const memberships = await ctx.db.collectionGroup("members").where("uid", "==", uid).get();
+  const batch = ctx.db.batch();
+  batch.set(ctx.db.doc(`users/${uid}`), { displayName, updatedAt: now }, { merge: true });
+  for (const m of memberships.docs) batch.update(m.ref, { displayName });
+  await batch.commit();
+  return { displayName, households: memberships.size };
+}

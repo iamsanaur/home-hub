@@ -244,6 +244,7 @@ struct SettingsView: View {
         if let h = hOpt {
             let power = HermesMobile.shared.power.snapshot()
             Screen(title: "Settings") {
+                ProfileSettingsSection(h: h)
                 SectionHeader(title: "Assistant")
                 HHCard {
                     Text(h.household.paused ? "Assistant is paused" : "Assistant is active").font(HHFont.cardTitle).foregroundStyle(h.household.paused ? HH.warning : HH.ink)

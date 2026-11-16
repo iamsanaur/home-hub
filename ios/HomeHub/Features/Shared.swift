@@ -130,17 +130,59 @@ struct AgentStatusView: View {
 
 struct ToolStep: Identifiable { let id = UUID(); let name: String; var done: Bool; var ok: Bool }
 
+/// Tool calls, shortened: one summary line ("Used 6 tools", or the tool running right now) that expands to
+/// each tool once with a count, instead of one row per call. Entries can be removed; that only tidies the
+/// display and never undoes what the assistant did.
 struct ActivityTimeline: View {
     let steps: [ToolStep]
+    var onRemove: ((String) -> Void)? = nil
+    var onClear: (() -> Void)? = nil
+    @State private var expanded = false
+
+    private func pretty(_ n: String) -> String {
+        let t = n.replacingOccurrences(of: "mcp__homehub__", with: "").replacingOccurrences(of: "_", with: " ")
+        return t.prefix(1).uppercased() + t.dropFirst()
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(steps) { s in
+        let running = steps.last { !$0.done }
+        let failed = steps.filter { $0.done && !$0.ok }.count
+        let summary = running.map { "Working · \(pretty($0.name))…" }
+            ?? "Used \(steps.count) tool\(steps.count == 1 ? "" : "s")" + (failed > 0 ? " · \(failed) failed" : "")
+        let names = steps.reduce(into: [String]()) { if !$0.contains($1.name) { $0.append($1.name) } }
+        VStack(alignment: .leading, spacing: 4) {
+            Button { withAnimation(.snappy) { expanded.toggle() } } label: {
                 HStack(spacing: Space.xs) {
-                    Circle().fill(!s.done ? HH.brand : (s.ok ? HH.success : HH.danger)).frame(width: 8, height: 8)
-                    Text(s.name.replacingOccurrences(of: "_", with: " ").capitalized).font(HHFont.caption).foregroundStyle(HH.inkSecondary)
+                    Circle().fill(running != nil ? HH.brand : (failed > 0 ? HH.danger : HH.success)).frame(width: 8, height: 8)
+                    Text(summary).font(HHFont.caption).foregroundStyle(HH.inkSecondary).lineLimit(1)
                     Spacer()
-                    Text(!s.done ? "running" : (s.ok ? "done" : "failed")).font(HHFont.caption).foregroundStyle(!s.done ? HH.brand : (s.ok ? HH.success : HH.danger))
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(HH.inkTertiary)
                 }
+                .frame(minHeight: 36).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(summary).accessibilityHint(expanded ? "Hide tool details" : "Show tool details")
+            if expanded {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(names, id: \.self) { name in
+                        let calls = steps.filter { $0.name == name }
+                        let anyRunning = calls.contains { !$0.done }
+                        let bad = calls.filter { $0.done && !$0.ok }.count
+                        HStack(spacing: Space.xs) {
+                            Text(pretty(name) + (calls.count > 1 ? " ×\(calls.count)" : "")).font(HHFont.caption).foregroundStyle(HH.inkSecondary)
+                            Spacer()
+                            Text(anyRunning ? "running" : (bad > 0 ? (calls.count > 1 ? "\(bad) failed" : "failed") : "done")).font(HHFont.caption)
+                                .foregroundStyle(anyRunning ? HH.brand : (bad > 0 ? HH.danger : HH.success))
+                            if let onRemove, !anyRunning {
+                                Button { onRemove(name) } label: { Image(systemName: "xmark").font(.caption.weight(.semibold)).foregroundStyle(HH.inkTertiary).frame(width: 36, height: 36) }
+                                    .accessibilityLabel("Remove \(pretty(name))")
+                            }
+                        }
+                    }
+                    if let onClear, running == nil {
+                        Button("Clear all", action: onClear).font(HHFont.label).foregroundStyle(HH.brand).frame(minHeight: 40)
+                    }
+                }.padding(.leading, Space.sm)
             }
         }
     }

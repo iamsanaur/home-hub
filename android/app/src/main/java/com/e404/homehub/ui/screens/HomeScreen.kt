@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Kitchen
 import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -138,6 +139,8 @@ fun HomeScreen() {
     var visible by remember { mutableStateOf(SECTIONS.map { it.first }.filter { sectionPrefs(context).getBoolean(it, true) }.toSet()) }
     var customising by remember { mutableStateOf(false) }
     var switcher by remember { mutableStateOf(false) }
+    var deletingActivity by remember { mutableStateOf<Record?>(null) }
+    var clearingActivity by remember { mutableStateOf(false) }
     val profile by remember { graph.session.profile(h.uid) }.collectAsState(null)
 
     val open = tasks.filter { !it.isDone }
@@ -273,10 +276,11 @@ fun HomeScreen() {
             }
             if ("activity" in visible && h.role.isManager) item {
                 Column(Modifier.widthIn(max = 840.dp).fillMaxWidth()) {
-                    SectionHeader("Recent activity")
                     val logs = (activity as? Loadable.Ready)?.value.orEmpty()
+                    // Owners and administrators can delete entries; the security audit trail is separate and stays.
+                    SectionHeader("Recent activity", action = if (logs.isNotEmpty()) "Clear" else null, onAction = { clearingActivity = true })
                     if (logs.isEmpty()) Text("No recent activity.", style = t.bodyCompact, color = c.inkSecondary)
-                    else GroupedList { logs.forEachIndexed { i, r -> if (i > 0) Divider(); ActivityTile(r, h.nameOf(r.s("actorUid")) ?: "Someone", h.zone) } }
+                    else GroupedList { logs.forEachIndexed { i, r -> if (i > 0) Divider(); ActivityTile(r, h.nameOf(r.s("actorUid")) ?: "Someone", h.zone, onDelete = { deletingActivity = r }) } }
                 }
             }
             item {
@@ -286,6 +290,14 @@ fun HomeScreen() {
             }
         }
     }
+    deletingActivity?.let { r ->
+        com.e404.homehub.ui.components.ConfirmationDialog("Delete this entry?", "It's removed from Recent activity for everyone. The security audit trail keeps a record that it was deleted.", "Delete", destructive = true,
+            onConfirm = { deletingActivity = null; scope.launch { runCatching { graph.gateway.call("DELETE", "/v1/households/${h.hid}/activity/${r.id}") }.onFailure { nav.toast(it.message ?: "Couldn't delete") } } },
+            onDismiss = { deletingActivity = null })
+    }
+    if (clearingActivity) com.e404.homehub.ui.components.ConfirmationDialog("Clear recent activity?", "All entries are removed for everyone in ${h.household.name}. The security audit trail keeps a record that it was cleared.", "Clear", destructive = true,
+        onConfirm = { clearingActivity = false; scope.launch { runCatching { graph.gateway.call("DELETE", "/v1/households/${h.hid}/activity") }.onSuccess { nav.toast("Activity cleared") }.onFailure { nav.toast(it.message ?: "Couldn't clear") } } },
+        onDismiss = { clearingActivity = false })
     if (customising) FormSheet("Dashboard sections", { customising = false }) {
         SECTIONS.forEach { (id, label) ->
             Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -300,13 +312,15 @@ fun HomeScreen() {
 }
 
 @Composable
-fun ActivityTile(r: Record, actor: String, zone: java.time.ZoneId) {
+fun ActivityTile(r: Record, actor: String, zone: java.time.ZoneId, onDelete: (() -> Unit)? = null) {
     val agent = r.s("actorKind") == "agent"
     val action = (r.s("action") ?: "").replace('.', ' ').replace('_', ' ')
     HomeHubListTile(
         "${if (agent) "Assistant (for $actor)" else actor}: $action",
         subtitle = r.t("createdAt")?.let { Dates.relative(it, zone) },
         leadingIcon = if (agent) Icons.Outlined.AutoAwesome else Icons.Outlined.ReceiptLong,
+        trailing = onDelete?.let { del -> { HomeHubIconButton(Icons.Outlined.DeleteOutline, "Delete this activity entry", del, tint = HomeHubTheme.colors.inkTertiary) } },
+        chevron = false,
     )
 }
 

@@ -17,6 +17,14 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
@@ -235,17 +243,53 @@ fun AgentStatusIndicator(state: AgentState, modifier: Modifier = Modifier) {
 data class ToolStep(val name: String, val done: Boolean, val ok: Boolean)
 
 /** Tool activity: what the agent touched, in order, and whether each step succeeded. */
+/**
+ * Tool calls, shortened: one summary line ("Used 6 tools", or the tool running right now) that expands to
+ * each tool once with a count, instead of one row per call.
+ */
 @Composable
-fun AgentActivityTimeline(steps: List<ToolStep>, modifier: Modifier = Modifier) {
+fun AgentActivityTimeline(steps: List<ToolStep>, modifier: Modifier = Modifier, onRemove: ((String) -> Unit)? = null, onClear: (() -> Unit)? = null) {
     val c = HomeHubTheme.colors
     val t = HomeHubTheme.type
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        steps.forEach { s ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(if (!s.done) c.brand else if (s.ok) c.success else c.danger))
-                Spacer(Modifier.width(Space.xs))
-                Text(s.name.replace('_', ' ').replaceFirstChar { it.uppercase() }, style = t.caption, color = c.inkSecondary, modifier = Modifier.weight(1f))
-                Text(if (!s.done) "running" else if (s.ok) "done" else "failed", style = t.caption, color = if (!s.done) c.brand else if (s.ok) c.success else c.danger)
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val pretty = { n: String -> n.removePrefix("mcp__homehub__").replace('_', ' ').replaceFirstChar { it.uppercase() } }
+    val running = steps.lastOrNull { !it.done }
+    val failed = steps.count { it.done && !it.ok }
+    val summary = when {
+        running != null -> "Working · ${pretty(running.name)}…"
+        failed > 0 -> "Used ${steps.size} tool${if (steps.size == 1) "" else "s"} · $failed failed"
+        else -> "Used ${steps.size} tool${if (steps.size == 1) "" else "s"}"
+    }
+    Column(modifier) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 36.dp).clip(RoundedCornerShape(Radius.control))
+                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide tool details" else "Show tool details") { expanded = !expanded },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (running != null) c.brand else if (failed > 0) c.danger else c.success))
+            Spacer(Modifier.width(Space.xs))
+            Text(summary, style = t.caption, color = c.inkSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, tint = c.inkTertiary, modifier = Modifier.size(20.dp))
+        }
+        if (expanded) Column(Modifier.padding(start = 16.dp, top = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            steps.groupBy { it.name }.forEach { (name, calls) ->
+                val anyRunning = calls.any { !it.done }
+                val bad = calls.count { it.done && !it.ok }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(pretty(name) + if (calls.size > 1) " ×${calls.size}" else "", style = t.caption, color = c.inkSecondary, modifier = Modifier.weight(1f))
+                    Text(if (anyRunning) "running" else if (bad > 0) (if (calls.size > 1) "$bad failed" else "failed") else "done", style = t.caption,
+                        color = if (anyRunning) c.brand else if (bad > 0) c.danger else c.success)
+                    // Remove this tool's entries from the list (the work itself is unaffected).
+                    if (onRemove != null && !anyRunning) {
+                        Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = "Remove ${pretty(name)}") { onRemove(name) }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Outlined.Close, "Remove ${pretty(name)}", tint = c.inkTertiary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+            if (onClear != null && running == null) {
+                Text("Clear all", style = t.label, color = c.brand,
+                    modifier = Modifier.heightIn(min = 40.dp).clickable(role = Role.Button) { onClear() }.padding(top = 10.dp))
             }
         }
     }

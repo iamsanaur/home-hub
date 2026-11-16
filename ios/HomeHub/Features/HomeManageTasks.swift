@@ -32,6 +32,10 @@ private struct HomeContent: View {
     @State private var low: LiveQuery<Record>?
     @State private var txns: LiveQuery<Record>?
     @State private var budgets: LiveQuery<Record>?
+    @State private var activity: LiveQuery<Record>?
+    @State private var deletingActivity: Record?
+    @State private var clearingActivity = false
+    @State private var activityNote: String?
 
     var tasks: [TaskItem] { allTasks.filter { $0.householdId == h.hid }.map(\.model) }
 
@@ -101,7 +105,37 @@ private struct HomeContent: View {
                 SectionHeaderLink(title: "Budget", action: "Finance") { FinanceView() }
                 NavigationLink { FinanceView() } label: { HHCard { BudgetSummaryView(spent: spent, limit: limit, income: income, currency: h.currency) } }.buttonStyle(.plain)
             }
+
+            // Owners and administrators can delete entries; the security audit trail is separate and stays.
+            if h.role.isManager {
+                let logs = activity?.items ?? []
+                SectionHeader(title: "Recent activity", action: logs.isEmpty ? nil : "Clear", onAction: { clearingActivity = true })
+                if logs.isEmpty { Text("No recent activity.").font(HHFont.bodyCompact).foregroundStyle(HH.inkSecondary) }
+                else {
+                    GroupedList {
+                        ForEach(Array(logs.enumerated()), id: \.element.id) { i, r in
+                            if i > 0 { RowDivider() }
+                            let agent = r.s("actorKind") == "agent"
+                            let who = h.name(r.s("actorUid")) ?? "Someone"
+                            HHListRow(title: "\(agent ? "Assistant (for \(who))" : who): \((r.s("action") ?? "").replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " "))",
+                                      subtitle: r.t("createdAt").map { Dates.relative($0, tz: h.tz) }, systemImage: agent ? "sparkles" : "list.bullet.rectangle",
+                                      trailing: AnyView(Button { deletingActivity = r } label: { Image(systemName: "trash").foregroundStyle(HH.inkTertiary).frame(width: 44, height: 44) }.accessibilityLabel("Delete this activity entry")))
+                        }
+                    }
+                }
+            }
         }
+        .confirmationDialog("Delete this entry?", isPresented: Binding(get: { deletingActivity != nil }, set: { if !$0 { deletingActivity = nil } }), titleVisibility: .visible, presenting: deletingActivity) { r in
+            Button("Delete", role: .destructive) {
+                Task { do { try await Gateway.shared.call("DELETE", "/v1/households/\(h.hid)/activity/\(r.id)") } catch { activityNote = error.localizedDescription } }
+            }
+        } message: { _ in Text("It's removed from Recent activity for everyone. The security audit trail keeps a record that it was deleted.") }
+        .confirmationDialog("Clear recent activity?", isPresented: $clearingActivity, titleVisibility: .visible) {
+            Button("Clear", role: .destructive) {
+                Task { do { try await Gateway.shared.call("DELETE", "/v1/households/\(h.hid)/activity") } catch { activityNote = error.localizedDescription } }
+            }
+        } message: { Text("All entries are removed for everyone in \(h.household.name). The security audit trail keeps a record that it was cleared.") }
+        .alert("Couldn't delete", isPresented: Binding(get: { activityNote != nil }, set: { if !$0 { activityNote = nil } })) { Button("OK") { activityNote = nil } } message: { Text(activityNote ?? "") }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { NavigationLink { NotificationsView() } label: { Image(systemName: "bell") }.accessibilityLabel("Notifications") }
             ToolbarItem(placement: .topBarTrailing) { NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("Settings") }
@@ -120,6 +154,9 @@ private struct HomeContent: View {
             if h.role == .staff { eq = eq.whereField("staffVisible", isEqualTo: true) }
             events = LiveQuery(eq.whereField("startAt", isGreaterThanOrEqualTo: Timestamp(date: startDay)).whereField("startAt", isLessThan: Timestamp(date: startDay.addingTimeInterval(3 * 86400))).order(by: "startAt")) { Record(id: $0, data: $1) }
             low = LiveQuery(db().collection("households/\(h.hid)/pantryItems").whereField("lowStock", isEqualTo: true)) { Record(id: $0, data: $1) }
+            if h.role.isManager {
+                activity = LiveQuery(db().collection("households/\(h.hid)/activityLogs").order(by: "createdAt", descending: true).limit(to: 5)) { Record(id: $0, data: $1) }
+            }
         }
     }
 }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { Timestamp } from "firebase-admin/firestore";
 import { clearFirestore, testCtx } from "./helpers";
 import { Actor, AppError } from "../../src/services/base";
-import { acceptInvitation, changeMemberRole, createHousehold, invite, removeMember, setAutonomy } from "../../src/services/households";
+import { acceptInvitation, changeMemberRole, createHousehold, invite, removeMember, setAutonomy, updateDisplayName } from "../../src/services/households";
 import { completeTask, createTask, handleTaskCompleted, listTasks } from "../../src/services/tasks";
 import { createMealPlan, generateMealShoppingList, markItemPurchased } from "../../src/services/food";
 import { getBudgetSummary, recordBillPayment, recordExpense } from "../../src/services/finance";
@@ -31,6 +31,22 @@ beforeEach(async () => {
 });
 
 describe("households, invitations and roles", () => {
+  it("renaming a person updates their profile and every household they belong to", async () => {
+    // A second household where the owner is also a member.
+    const other = (await createHousehold(ctx, { uid: "u_other", displayName: "Other", email: "other@example.com" }, { name: "Other Home", currency: "INR", timezone: "Asia/Kolkata", locale: "en" })).householdId;
+    const inv = await invite(ctx, { uid: "u_other", kind: "user" }, other, { role: "adult", email: "owner@example.com" });
+    await acceptInvitation(ctx, { uid: owner.uid, email: "owner@example.com", emailVerified: true, displayName: "owner@example.com" }, inv.token);
+    const r = await updateDisplayName(ctx, owner.uid, "  Sanaur   Rahman ");
+    expect(r).toEqual({ displayName: "Sanaur Rahman", households: 2 });
+    for (const h of [hid, other]) expect((await ctx.db.doc(`households/${h}/members/${owner.uid}`).get()).data()!.displayName).toBe("Sanaur Rahman");
+    expect((await ctx.db.doc(`users/${owner.uid}`).get()).data()!.displayName).toBe("Sanaur Rahman");
+    // Other members are untouched, and bad names are refused.
+    expect((await ctx.db.doc(`households/${hid}/members/${adult.uid}`).get()).data()!.displayName).not.toBe("Sanaur Rahman");
+    await expect(updateDisplayName(ctx, owner.uid, "   ")).rejects.toThrow();
+    await expect(updateDisplayName(ctx, owner.uid, "x".repeat(81))).rejects.toThrow();
+    await expect(updateDisplayName(ctx, owner.uid, "<script>")).rejects.toThrow();
+  });
+
   it("creates default deterministic scheduled jobs", async () => {
     const jobs = await ctx.db.collection(`households/${hid}/scheduledJobs`).get();
     expect(jobs.size).toBe(8);

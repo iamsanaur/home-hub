@@ -45,6 +45,14 @@ Screenshots: `tests/evidence/android/`, `tests/evidence/ios/` (Connections: `tes
 - Plugin `homehub.homeassistant` (`plugins/builtins/homeAssistant.ts`): household's own Home Assistant over HTTPS (Nabu Casa or own domain) with a long-lived token in Secret Manager. Imports light, switch, fan, climate, lock, door/window/motion binary sensors and temperature/humidity sensors; rooms from Home Assistant areas; °F→°C. Same tool names as other device plugins, so app control, automations, Alexa and approvals work unchanged; unlock stays approval-only and children/staff can't use locks. Every write is read back before HomeHub reports success; the scheduler re-syncs every 15 minutes.
 - Tests: 5 emulator tests against a fake Home Assistant (import/mapping, verified control, unlock approval, background sync, https-only and bad token). Deployed; listed as available in the production catalog. Not yet tried against a real Home Assistant instance.
 
+## Updates — 16 Nov 2026 (later)
+- **Edit your name**: Settings → Your profile on both apps; `PATCH /v1/me` updates the sign-in profile, user profile and every household membership (accounts created without a name showed their email).
+- **Assistant tool entries**: tool calls collapse to one line ("Used 5 tools" / the tool running now); expand to see each tool once with a count, remove entries or clear all (display only — nothing is undone).
+- **Recent activity (Home)**: owners and administrators can delete single entries or clear the feed (`DELETE /v1/households/:hid/activity[/:logId]`); runs in progress are kept; the security audit trail is permanent and records each deletion. iOS Home gained the Recent activity section.
+- **Assistant reliability**: provider 429/5xx retried with backoff and a cross-provider fallback model (phone proxy `MODEL_FALLBACK`; server Hermes `fallback_providers`).
+- **Hermes hosting**: HomeHub's own Cloudflare named tunnel `homehub` → `https://hermes.example.com` (permanent), runs in Docker with `restart: unless-stopped`; the Mac and Docker must be running. `scripts/hermes-docker.sh up|status|down`.
+- Android release APK built and signed (`dist/android/`, keystore in `config/release/` — back it up).
+
 ## Done
 - Repo structure, branding from `brand-logo.png` (iOS AppIcon, Android adaptive + monochrome icon, splash, in-app mark).
 - Firestore + Storage security rules (deny by default, membership/role checks, finance privacy, staff isolation, immutable fields, version bumps, append-only ledgers, server-only agent data). Indexes.

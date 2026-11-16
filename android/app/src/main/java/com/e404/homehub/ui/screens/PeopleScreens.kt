@@ -357,6 +357,7 @@ fun SettingsScreen() {
         scope.launch { runCatching { graph.firestore.document("users/${h.uid}").set(mapOf("notificationPrefs" to next), SetOptions.merge()).await() }.onFailure { nav.toast("Couldn't save") } }
     }
     ListScreen("Settings") {
+        item { ProfileSettings() }
         item {
             Column {
                 SectionHeader("Assistant")

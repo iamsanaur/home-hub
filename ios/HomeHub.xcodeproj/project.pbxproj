@@ -37,6 +37,7 @@
 		B999630A788251CEDFA0B416 /* People.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670B2E2FCFDE4015766198C1 /* People.swift */; };
 		BD82D505C1ED53727C57548F /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5E1F702D15D718FD589E1172 /* FirebaseFirestore */; };
 		C693BE678348E88B301E14C3 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAF9D3FE13C2C26FCBE10EBD /* AppModel.swift */; };
+		C7C7936B7FA5BEBECC1A183D /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666E97970FC3A7EAB159DE20 /* Profile.swift */; };
 		CD11127471D8495F87E9739B /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E85B7AC5BCA9421CB295F4 /* Tokens.swift */; };
 		CE7856A15EC312DF7E9F2CC0 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = F7FD3ACF3927E16489A6A408 /* FirebaseAuth */; };
 		D0032BAF9E31B8D3853E3712 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 3D059E657276A3251892F0A3 /* FirebaseAppCheck */; };
@@ -85,6 +86,7 @@
 		3D7A282AD34EEDE60227EDB8 /* Offline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Offline.swift; sourceTree = "<group>"; };
 		4AAE2261333524691AF73ED5 /* HomeHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHubApp.swift; sourceTree = "<group>"; };
 		625927E67861BA2406286C96 /* HomeManageTasks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeManageTasks.swift; sourceTree = "<group>"; };
+		666E97970FC3A7EAB159DE20 /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		670B2E2FCFDE4015766198C1 /* People.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = People.swift; sourceTree = "<group>"; };
 		6DE70DAD411C2BD7A33D24FF /* AIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIView.swift; sourceTree = "<group>"; };
 		7BB1A75FF76F7942DA440EA7 /* Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Records.swift; sourceTree = "<group>"; };
@@ -139,6 +141,7 @@
 				FE1E1E686A9100E71ADEF454 /* NotificationPrompt.swift */,
 				078C673B993C0A4AE99E58D9 /* Onboarding.swift */,
 				670B2E2FCFDE4015766198C1 /* People.swift */,
+				666E97970FC3A7EAB159DE20 /* Profile.swift */,
 				7BB1A75FF76F7942DA440EA7 /* Records.swift */,
 				8A391030EA963C677BD0911A /* Shared.swift */,
 				89318DFAE4FDFB2DBA1A3820 /* SpendCapture.swift */,
@@ -434,6 +437,7 @@
 				8338B37929CCCB403851ABA3 /* Offline.swift in Sources */,
 				9ECC080E32B19DA640701342 /* Onboarding.swift in Sources */,
 				B999630A788251CEDFA0B416 /* People.swift in Sources */,
+				C7C7936B7FA5BEBECC1A183D /* Profile.swift in Sources */,
 				054D060032B594DE3B2680B5 /* Records.swift in Sources */,
 				EBEF2EDAC15010BA018E0C2C /* RootView.swift in Sources */,
 				0CBB5023CF36D219F1056AD4 /* Shared.swift in Sources */,

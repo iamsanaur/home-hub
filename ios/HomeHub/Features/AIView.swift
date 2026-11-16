@@ -23,6 +23,10 @@ final class AgentSession {
     func newConversation() { task?.cancel(); sessionId = nil; live = nil }
     func stop() { task?.cancel() }
 
+    /// Tool-usage entries are a display of what the assistant did; removing them doesn't undo anything.
+    func removeTool(_ name: String) { live?.steps.removeAll { $0.name == name && $0.done } }
+    func clearTools() { live?.steps = [] }
+
     func send(_ h: HouseholdContext, offline: OfflineStore, prompt: String) {
         guard task == nil || task!.isCancelled || live?.state != .executing, !prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         live = LiveRun(prompt: prompt)
@@ -122,7 +126,7 @@ struct AIView: View {
                                 }.buttonStyle(.plain)
                             }
                         }
-                        if let live = session.live { LiveRunView(live: live, h: h) { session.send(h, offline: model.offline, prompt: live.prompt) }.id("live") }
+                        if let live = session.live { LiveRunView(live: live, h: h, retry: { session.send(h, offline: model.offline, prompt: live.prompt) }, removeTool: session.removeTool, clearTools: session.clearTools).id("live") }
                     }
                     .frame(maxWidth: 720, alignment: .leading).padding(.horizontal, Space.md).padding(.bottom, 120).frame(maxWidth: .infinity)
                 }
@@ -159,7 +163,7 @@ struct AIView: View {
 }
 
 private struct LiveRunView: View {
-    let live: LiveRun, h: HouseholdContext, retry: () -> Void
+    let live: LiveRun, h: HouseholdContext, retry: () -> Void, removeTool: (String) -> Void, clearTools: () -> Void
     @State private var approvals: [String: LiveDoc] = [:]
     @State private var busy: String?
     var body: some View {
@@ -169,7 +173,7 @@ private struct LiveRunView: View {
                 HStack { Text("HomeHub").font(HHFont.label).foregroundStyle(HH.inkSecondary); Spacer(); AgentStatusView(state: live.state) }
                 if live.onDevice { Text("Handled on your phone · no AI used").font(HHFont.caption).foregroundStyle(HH.inkTertiary) }
                 ForEach(live.notes, id: \.self) { Text($0).font(HHFont.caption).foregroundStyle(HH.inkSecondary) }
-                if !live.steps.isEmpty { Text("Tool activity").font(HHFont.caption).foregroundStyle(HH.inkSecondary); ActivityTimeline(steps: live.steps) }
+                if !live.steps.isEmpty { ActivityTimeline(steps: live.steps, onRemove: removeTool, onClear: clearTools) }
                 if !live.text.isEmpty { Text(live.text.trimmingCharacters(in: .whitespacesAndNewlines)).font(HHFont.body).foregroundStyle(HH.ink).accessibilityAddTraits(.updatesFrequently) }
                 if !live.verified.isEmpty {
                     Text("Verified in HomeHub").font(HHFont.label).foregroundStyle(HH.success).padding(.top, Space.xs)

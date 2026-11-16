@@ -16,7 +16,7 @@ IMAGE="homehub-hermes:v0.21.2-5eb99eb2"
 source "$ROOT/scripts/dev-env.sh" >/dev/null
 
 secret() { (cd "$ROOT/backend/firebase" && firebase functions:secrets:access "$1" --project prod 2>/dev/null) || true; }
-tunnel_url() { "${COMPOSE[@]}" logs tunnel 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1; }
+PUBLIC_URL="${HOMEHUB_PUBLIC_URL:-https://hermes.example.com}"
 set_env() { # set_env KEY VALUE in the Functions env file
   if grep -q "^$1=" "$FUNCS_ENV"; then sed -i '' "s#^$1=.*#$1=$2#" "$FUNCS_ENV"; else printf '%s=%s\n' "$1" "$2" >> "$FUNCS_ENV"; fi
 }
@@ -33,6 +33,11 @@ model:
   provider: openrouter
   default: google/gemini-2.5-flash
   api_mode: chat_completions
+
+# When the primary model is rate-limited or erroring (e.g. provider 429), switch to another provider's model.
+fallback_providers:
+  - provider: openrouter
+    model: openai/gpt-4o-mini
 YAML
   } > "$H/config.yaml"
 
@@ -69,14 +74,21 @@ wait_healthy() { # wait_healthy URL
 
 up() {
   docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "Image $IMAGE missing — build it: docker build -t $IMAGE ~/.hermes/hermes-agent (at commit 5eb99eb2)"; exit 1; }
+  [[ -f "$HOMEHUB_HERMES_HOME/cloudflared/config.yml" && -f "$HOMEHUB_HERMES_HOME/cloudflared/credentials.json" ]] || {
+    cat <<EOT
+The Cloudflare tunnel isn't set up yet. One time (needs your Cloudflare login, \`cloudflared tunnel login\`):
+  cloudflared tunnel create homehub
+  cloudflared tunnel route dns --overwrite-dns <tunnel-uuid> ${PUBLIC_URL#https://}
+  mkdir -p $HOMEHUB_HERMES_HOME/cloudflared && cp ~/.cloudflared/<tunnel-uuid>.json $HOMEHUB_HERMES_HOME/cloudflared/credentials.json
+  # and write $HOMEHUB_HERMES_HOME/cloudflared/config.yml (see docs/hermes-setup.md)
+EOT
+    exit 1; }
   prepare
   "${COMPOSE[@]}" up -d
   wait_healthy "http://127.0.0.1:8652" || { echo "Hermes didn't become healthy — scripts/hermes-docker.sh logs"; exit 1; }
   echo "Hermes healthy on 127.0.0.1:8652"
-  local url=""
-  for _ in $(seq 1 40); do url="$(tunnel_url)"; [[ -n "$url" ]] && break; sleep 2; done
-  [[ -n "$url" ]] || { echo "Tunnel didn't report a URL"; exit 1; }
-  wait_healthy "$url" || { echo "Tunnel $url not reachable yet"; exit 1; }
+  local url="$PUBLIC_URL"
+  wait_healthy "$url" || { echo "$url isn't reachable yet — check: docker logs homehub-hermes-tunnel"; exit 1; }
   echo "Public URL: $url"
 
   local current; current="$(grep '^HERMES_API_URL=' "$FUNCS_ENV" | cut -d= -f2- || true)"
@@ -95,8 +107,8 @@ case "${1:-}" in
   up) up ;;
   status)
     "${COMPOSE[@]}" ps
-    url="$(tunnel_url)"; echo "Tunnel: ${url:-none}"
-    curl -fsS --max-time 5 http://127.0.0.1:8652/health && echo
+    echo "Public URL: $PUBLIC_URL ($(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$PUBLIC_URL/health"))"
+    curl -fsS --max-time 5 http://127.0.0.1:8652/health >/dev/null && echo "Local Hermes: healthy"
     echo "Production HERMES_API_URL: $(grep '^HERMES_API_URL=' "$FUNCS_ENV" | cut -d= -f2-)" ;;
   logs) "${COMPOSE[@]}" logs -f hermes ;;
   down) "${COMPOSE[@]}" down ;;

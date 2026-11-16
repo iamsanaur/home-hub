@@ -8,7 +8,7 @@ import {
 } from "../core/schemas";
 import { Actor, AppError, Ctx, invalid, paths, requireCapability, requireMember, ts } from "../services/base";
 import {
-  acceptInvitation, changeMemberRole, createHousehold, getAutonomy, invite, removeMember, revokeInvitation, setAutonomy,
+  acceptInvitation, changeMemberRole, createHousehold, getAutonomy, invite, removeMember, revokeInvitation, setAutonomy, updateDisplayName,
 } from "../services/households";
 import { decideApproval, getApproval, listPendingApprovals } from "../services/approvals";
 import { recordBillPayment, getBudgetSummary } from "../services/finance";
@@ -24,6 +24,7 @@ import { claimJobForDevice } from "../services/jobs";
 import { completeProviderOAuth, oauthResultPage } from "../plugins/modelAccounts";
 import { mountPhase1Routes } from "./phase1Routes";
 import { mountSpendRoutes } from "../finance/spendCapture";
+import { clearActivity, deleteActivityEntry } from "../services/activityFeed";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -177,6 +178,13 @@ export function createGatewayApp(deps: GatewayDeps) {
     res.json(await claimJobForDevice(ctx, actor(req), hid(req), String(req.params.jid)));
   }));
 
+  // --- Recent activity feed: owners/administrators can delete entries (the audit trail is separate and permanent) ---
+  app.delete("/v1/households/:hid/activity/:logId", wrap(async (req, res) => {
+    res.json(await deleteActivityEntry(ctx, hid(req), actor(req), String(req.params.logId)));
+  }));
+  app.delete("/v1/households/:hid/activity", wrap(async (req, res) => {
+    res.json(await clearActivity(ctx, hid(req), actor(req)).catch((e) => { if (e instanceof AppError && e.code === "nothing_to_clear") return { removed: 0 }; throw e; }));
+  }));
   app.post("/v1/households/:hid/agent/workflows/:wid/stop", wrap(async (req, res) => {
     res.json(await stopAgentRun(ctx, deps.hermes(), hid(req), req.user!.uid, String(req.params.wid)));
   }));
@@ -254,6 +262,12 @@ export function createGatewayApp(deps: GatewayDeps) {
   }));
   app.get("/v1/me/export", wrap(async (req, res) => {
     res.set("Content-Disposition", "attachment; filename=homehub-export.json").json(await exportUserData(ctx, req.user!.uid));
+  }));
+  app.patch("/v1/me", wrap(async (req, res) => {
+    const input = body(z.object({ displayName: z.string().max(200) }), req);
+    const r = await updateDisplayName(ctx, req.user!.uid, input.displayName);
+    await getAuth().updateUser(req.user!.uid, { displayName: r.displayName });
+    res.json(r);
   }));
   app.delete("/v1/me", wrap(async (req, res) => {
     const result = await deleteUserData(ctx, req.user!.uid);
