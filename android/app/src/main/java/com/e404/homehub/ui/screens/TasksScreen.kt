@@ -157,6 +157,7 @@ private fun TaskEditor(task: Task?, onDismiss: () -> Unit) {
                 nav.toast(if (task == null) "Task added" else "Task updated")
             }
         }, Modifier.fillMaxWidth())
+        if (task != null) TaskComments(task.id)
         if (task != null && (h.role.isManager || h.role.isAdultPlus)) HomeHubButton("Delete task", { confirmDelete = true }, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
     }
     if (pickDate) {

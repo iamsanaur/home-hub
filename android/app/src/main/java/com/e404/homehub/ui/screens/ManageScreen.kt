@@ -60,9 +60,11 @@ private val GROUPS = listOf(
     "Money and bills" to listOf(
         Entry("Finance", "Spending, income and budgets", Icons.Outlined.AccountBalanceWallet, Routes.FINANCE) { _, fin -> fin },
         Entry("Bills", "Due dates and payment history", Icons.Outlined.Description, Routes.BILLS) { _, fin -> fin },
+        Entry("Savings goals", "Targets and what you've put aside", Icons.Outlined.AccountBalanceWallet, Routes.SAVINGS) { _, fin -> fin },
     ),
     "Home care" to listOf(
         Entry("Maintenance", "Repairs, servicing and warranties", Icons.Outlined.Build, Routes.MAINTENANCE) { r, _ -> r.isAdultPlus || r == Role.Staff },
+        Entry("Assets", "Appliances and vehicles with warranty and service dates", Icons.Outlined.Build, Routes.ASSETS) { r, _ -> r.isAdultPlus },
         Entry("Inventory", "Furniture, appliances and valuables", Icons.Outlined.Weekend, Routes.INVENTORY) { r, _ -> r.isAdultPlus },
     ),
     "Smart home and connections" to listOf(

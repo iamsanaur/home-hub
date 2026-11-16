@@ -174,8 +174,10 @@ struct ManageView: View {
                                               ("Pantry", "Stock, expiry and low items", "refrigerator", AnyView(PantryView()), true)])
                 group("Food and meals", [("Meal planner", "Weekly menu and recipes", "fork.knife", AnyView(MealsView()), true)])
                 group("Money and bills", [("Finance", "Spending, income and budgets", "wallet.bifold", AnyView(FinanceView()), h.canFinance),
-                                          ("Bills", "Due dates and payment history", "doc.text", AnyView(BillsView()), h.canFinance)])
+                                          ("Bills", "Due dates and payment history", "doc.text", AnyView(BillsView()), h.canFinance),
+                                          ("Savings goals", "Targets and what you've put aside", "banknote", AnyView(RecordListView(spec: .savings(h))), h.canFinance)])
                 group("Home care", [("Maintenance", "Repairs, servicing and warranties", "wrench.and.screwdriver", AnyView(RecordListView(spec: .maintenance(h))), h.role.isAdultPlus || h.role == .staff),
+                                    ("Assets", "Appliances and vehicles with warranty and service dates", "wrench.and.screwdriver", AnyView(RecordListView(spec: .assets(h))), h.role.isAdultPlus),
                                     ("Inventory", "Furniture, appliances and valuables", "sofa", AnyView(RecordListView(spec: .inventory(h))), h.role.isAdultPlus)])
                 group("Household records", [("Calendar", "Events, birthdays and appointments", "calendar", AnyView(RecordListView(spec: .calendar(h))), true),
                                             ("Documents", "Agreements, insurance and warranties", "doc.on.doc", AnyView(RecordListView(spec: .documents(h))), h.role.isAdultPlus),
@@ -215,6 +217,7 @@ private struct TasksContent: View {
     @State private var editing = false
     @State private var undo: TaskItem?
     @State private var deleting: TaskItem?
+    @State private var commenting: TaskItem?
     @State private var deleteError: String?
 
     var body: some View {
@@ -239,10 +242,13 @@ private struct TasksContent: View {
                             model.offline.setTaskDone(hid: h.hid, uid: h.uid, id: t.id, done: done)
                             if done { undo = t }
                         }
-                        .contextMenu { if h.role.isAdultPlus { Button("Delete task", systemImage: "trash", role: .destructive) { deleting = t } } }
+                        .contextMenu {
+                            if h.role.isAdultPlus || t.assigneeUid == h.uid { Button("Comments", systemImage: "text.bubble") { commenting = t } }
+                            if h.role.isAdultPlus { Button("Delete task", systemImage: "trash", role: .destructive) { deleting = t } }
+                        }
                     }
                 }
-                if h.role.isAdultPlus { Text("Press and hold a task to delete it.").font(HHFont.caption).foregroundStyle(HH.inkTertiary) }
+                if h.role.isAdultPlus { Text("Press and hold a task for comments or to delete it.").font(HHFont.caption).foregroundStyle(HH.inkTertiary) }
             }
         }
         .confirmationDialog("Delete this task?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible, presenting: deleting) { t in
@@ -260,6 +266,7 @@ private struct TasksContent: View {
         }
         .toolbar { if h.role.isAdultPlus || h.role == .child { ToolbarItem(placement: .primaryAction) { Button { editing = true } label: { Image(systemName: "plus") }.accessibilityLabel("New task") } } }
         .sheet(isPresented: $editing) { TaskEditor(h: h).presentationDetents([.large]) }
+        .sheet(item: Binding(get: { commenting }, set: { commenting = $0 })) { t in TaskCommentsSheet(h: h, taskId: t.id, taskTitle: t.title).presentationDetents([.medium, .large]) }
     }
 }
 

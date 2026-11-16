@@ -237,4 +237,104 @@ export async function createNote(ctx: Ctx, hid: string, a: Actor, o: { title: st
   return { id };
 }
 
+
+
+// ---------------- savings goals ----------------
+
+export async function listSavingsGoals(ctx: Ctx, hid: string, a: Actor) {
+  await requireCapability(ctx, hid, a.uid, "finance.read");
+  const s = await ctx.db.collection(paths.col(hid, "savingsGoals")).limit(50).get();
+  return s.docs.map((d) => { const x = d.data(); const t = x.targetMinor as number, v = (x.savedMinor ?? 0) as number; return { id: d.id, name: x.name as string, targetMinor: t, savedMinor: v, remainingMinor: Math.max(0, t - v), percent: t > 0 ? Math.min(100, Math.floor((v * 100) / t)) : 0, currency: x.currency as string, targetDate: toIso(x.targetDate) }; });
+}
+
+export async function createSavingsGoal(ctx: Ctx, hid: string, a: Actor, o: { name: string; targetMinor: number; savedMinor?: number; targetDate?: string }) {
+  await requireCapability(ctx, hid, a.uid, "finance.write");
+  const currency = ((await ctx.db.doc(paths.household(hid)).get()).data()?.currency as string) ?? "INR";
+  const { id } = await createDoc(ctx, hid, "savingsGoals", a, { name: o.name, targetMinor: o.targetMinor, savedMinor: o.savedMinor ?? 0, currency, targetDate: o.targetDate ? Timestamp.fromDate(new Date(o.targetDate)) : null });
+  await audit(ctx, hid, a, "finance.goal_created", { type: "savingsGoal", id }, { targetMinor: o.targetMinor });
+  return { id };
+}
+
+/** Bookkeeping only: records that money was set aside for a goal. It never moves money. */
+export async function addToSavingsGoal(ctx: Ctx, hid: string, a: Actor, goal: string, deltaMinor: number) {
+  await requireCapability(ctx, hid, a.uid, "finance.write");
+  if (!Number.isSafeInteger(deltaMinor) || deltaMinor === 0) throw invalid("Amount must be a non-zero whole number of minor units");
+  const rows = (await listSavingsGoals(ctx, hid, a)).map((g) => ({ id: g.id, name: g.name }));
+  const g = pick(rows, goal, "savings goal");
+  const ref = ctx.db.doc(`${paths.col(hid, "savingsGoals")}/${g.id}`);
+  const saved = await ctx.db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const next = Math.max(0, ((snap.data()!.savedMinor ?? 0) as number) + deltaMinor);
+    tx.update(ref, { savedMinor: next, version: (snap.data()!.version ?? 0) + 1, updatedAt: ts(ctx.now()), updatedBy: a.uid });
+    return next;
+  });
+  await audit(ctx, hid, a, "finance.goal_contribution", { type: "savingsGoal", id: g.id }, { deltaMinor });
+  return { id: g.id, name: g.name, savedMinor: saved };
+}
+
+// ---------------- assets ----------------
+
+export async function listAssets(ctx: Ctx, hid: string, a: Actor) {
+  const m = await requireMember(ctx, hid, a.uid);
+  if (m.role === "staff") throw forbidden("Assets are visible to family members");
+  const s = await ctx.db.collection(paths.col(hid, "assets")).limit(200).get();
+  return s.docs.map((d) => { const x = d.data(); return { id: d.id, name: x.name as string, category: x.category ?? null, brand: x.brand ?? null, location: x.location ?? null, purchaseDate: toIso(x.purchaseDate), warrantyExpiresAt: toIso(x.warrantyExpiresAt), nextServiceAt: toIso(x.nextServiceAt) }; });
+}
+
+export async function createAsset(ctx: Ctx, hid: string, a: Actor, o: { name: string; category?: string; brand?: string; model?: string; location?: string; purchaseDate?: string; warrantyExpiresAt?: string; serviceIntervalDays?: number }) {
+  await requireCapability(ctx, hid, a.uid, "maintenance.write");
+  const d = (x?: string) => (x ? Timestamp.fromDate(new Date(x)) : null);
+  const { id } = await createDoc(ctx, hid, "assets", a, { name: o.name, category: o.category ?? "Appliance", brand: o.brand ?? null, model: o.model ?? null, location: o.location ?? null, purchaseDate: d(o.purchaseDate), warrantyExpiresAt: d(o.warrantyExpiresAt), serviceIntervalDays: o.serviceIntervalDays ?? null, nextServiceAt: null });
+  await audit(ctx, hid, a, "assets.created", { type: "asset", id }, { name: o.name });
+  return { id };
+}
+
+// ---------------- task comments ----------------
+
+async function taskAccess(ctx: Ctx, hid: string, a: Actor, taskId: string) {
+  const m = await requireMember(ctx, hid, a.uid);
+  const t = await ctx.db.doc(`${paths.col(hid, "tasks")}/${taskId}`).get();
+  if (!t.exists) throw notFound("Task");
+  if (!can(m, "tasks.read.all") && t.data()!.assigneeUid !== a.uid) throw forbidden("You can only see comments on tasks assigned to you");
+  return t.data()!;
+}
+
+export async function listTaskComments(ctx: Ctx, hid: string, a: Actor, taskId: string) {
+  await taskAccess(ctx, hid, a, taskId);
+  const s = await ctx.db.collection(`${paths.col(hid, "tasks")}/${taskId}/comments`).orderBy("createdAt", "asc").limit(100).get();
+  return s.docs.map((d) => ({ id: d.id, authorUid: d.data().authorUid as string, body: d.data().body as string, createdAt: toIso(d.data().createdAt), byAssistant: d.data().source === "agent" }));
+}
+
+export async function addTaskComment(ctx: Ctx, hid: string, a: Actor, taskId: string, body: string) {
+  await taskAccess(ctx, hid, a, taskId);
+  const text = body.trim().slice(0, 2000);
+  if (!text) throw invalid("Comment is empty");
+  const ref = await ctx.db.collection(`${paths.col(hid, "tasks")}/${taskId}/comments`).add({ householdId: hid, authorUid: a.uid, body: text, createdAt: ts(ctx.now()), source: a.kind === "agent" ? "agent" : "user" });
+  await audit(ctx, hid, a, "tasks.comment_added", { type: "task", id: taskId }, {});
+  return { id: ref.id };
+}
+
+// ---------------- documents (metadata only; never file contents) ----------------
+
+export async function listDocuments(ctx: Ctx, hid: string, a: Actor, o: { category?: string; expiringWithinDays?: number; limit?: number }) {
+  const m = await requireMember(ctx, hid, a.uid);
+  await requireCapability(ctx, hid, a.uid, "documents.read");
+  const s = await ctx.db.collection(paths.col(hid, "documents")).limit(300).get();
+  const horizon = o.expiringWithinDays !== undefined ? ctx.now().getTime() + o.expiringWithinDays * 86400_000 : null;
+  const rows = s.docs.filter((d) => { const x = d.data(); return !x.restricted || (x.allowedUids ?? []).includes(a.uid) || ["owner", "admin"].includes(m.role); })
+    .map((d) => { const x = d.data(); return { id: d.id, title: x.title as string, category: x.category ?? null, expiresAt: toIso(x.expiresAt), restricted: !!x.restricted }; })
+    .filter((r) => (!o.category || lc(r.category) === lc(o.category)) && (horizon === null || (r.expiresAt !== null && new Date(r.expiresAt).getTime() <= horizon)))
+    .sort((x, y) => (x.expiresAt ?? "9").localeCompare(y.expiresAt ?? "9"));
+  return rows.slice(0, o.limit ?? 30);
+}
+
+// ---------------- people and payments: only ever run after a person approves ----------------
+
+export async function findMember(ctx: Ctx, hid: string, ref: string): Promise<{ uid: string; name: string }> {
+  const s = await ctx.db.collection(paths.col(hid, "members")).where("status", "==", "active").limit(100).get();
+  const rows = s.docs.map((d) => ({ id: d.id, uid: d.id, name: String(d.data().displayName ?? d.data().email ?? d.id) }));
+  const hit = pick(rows, ref, "member");
+  return { uid: hit.uid, name: hit.name };
+}
+
 export { AppError };

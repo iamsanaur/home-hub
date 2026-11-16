@@ -38,6 +38,7 @@
 		9ECC080E32B19DA640701342 /* Onboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 078C673B993C0A4AE99E58D9 /* Onboarding.swift */; };
 		A26F58AF773FB2647C814E24 /* MoneyViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD381FF4BBECD2EB9614D3A5 /* MoneyViews.swift */; };
 		B999630A788251CEDFA0B416 /* People.swift in Sources */ = {isa = PBXBuildFile; fileRef = 670B2E2FCFDE4015766198C1 /* People.swift */; };
+		B9A240E8CB7536EAD5FBAF74 /* RecordsExtra.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7FFF894B2E7B2975AC31F9 /* RecordsExtra.swift */; };
 		BD82D505C1ED53727C57548F /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 5E1F702D15D718FD589E1172 /* FirebaseFirestore */; };
 		C693BE678348E88B301E14C3 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAF9D3FE13C2C26FCBE10EBD /* AppModel.swift */; };
 		C7C7936B7FA5BEBECC1A183D /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666E97970FC3A7EAB159DE20 /* Profile.swift */; };
@@ -94,6 +95,7 @@
 		666E97970FC3A7EAB159DE20 /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		670B2E2FCFDE4015766198C1 /* People.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = People.swift; sourceTree = "<group>"; };
 		6DE70DAD411C2BD7A33D24FF /* AIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIView.swift; sourceTree = "<group>"; };
+		7B7FFF894B2E7B2975AC31F9 /* RecordsExtra.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsExtra.swift; sourceTree = "<group>"; };
 		7BB1A75FF76F7942DA440EA7 /* Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Records.swift; sourceTree = "<group>"; };
 		89318DFAE4FDFB2DBA1A3820 /* SpendCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendCapture.swift; sourceTree = "<group>"; };
 		8A391030EA963C677BD0911A /* Shared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared.swift; sourceTree = "<group>"; };
@@ -153,6 +155,7 @@
 				670B2E2FCFDE4015766198C1 /* People.swift */,
 				666E97970FC3A7EAB159DE20 /* Profile.swift */,
 				7BB1A75FF76F7942DA440EA7 /* Records.swift */,
+				7B7FFF894B2E7B2975AC31F9 /* RecordsExtra.swift */,
 				8A391030EA963C677BD0911A /* Shared.swift */,
 				89318DFAE4FDFB2DBA1A3820 /* SpendCapture.swift */,
 				07FD0DE2C07236ECD248FA1D /* VendorBills.swift */,
@@ -453,6 +456,7 @@
 				B999630A788251CEDFA0B416 /* People.swift in Sources */,
 				C7C7936B7FA5BEBECC1A183D /* Profile.swift in Sources */,
 				054D060032B594DE3B2680B5 /* Records.swift in Sources */,
+				B9A240E8CB7536EAD5FBAF74 /* RecordsExtra.swift in Sources */,
 				EBEF2EDAC15010BA018E0C2C /* RootView.swift in Sources */,
 				0CBB5023CF36D219F1056AD4 /* Shared.swift in Sources */,
 				72A51312B0D791FF99BC5DDD /* SpendCapture.swift in Sources */,

@@ -26,6 +26,7 @@ import { getHouseholdReport, ReportKind } from "../services/reports";
 import { getAgentUsageReport } from "../services/usage";
 import {
   adjustPantryByName, cancelEvent, createCleaningRoutine, createNote, createRecipe, EventPatch, findShoppingItem, FixedBillPatch, getShoppingList,
+  addTaskComment, addToSavingsGoal, createAsset, createSavingsGoal, findMember, listAssets, listDocuments, listSavingsGoals, listTaskComments,
   listCleaning, listNotes, listRecipes, listShoppingLists, markCleaned, RecipeInput, removeShoppingItem, setBudget, updateEvent, updateFixedBill, updateShoppingItem,
 } from "../services/assistantTools";
 import { executeDeviceAction, listDevices, DeviceAction } from "../devices/devices";
@@ -34,6 +35,9 @@ import { executePluginTool, listIntegrations } from "../plugins/runtime";
 import { PLUGIN_INDEX } from "../plugins/catalog";
 import { listMemories, remember, deleteMemory } from "../services/memory";
 import { getMembership, requireMember, ts } from "../services/base";
+import { changeMemberRole, invite as inviteMember } from "../services/households";
+import { recordBillPayment } from "../services/finance";
+import { BillPaymentInput, InviteInput } from "../core/schemas";
 
 /**
  * HomeHub MCP tools. Design rules:
@@ -376,6 +380,41 @@ export const TOOLS: ToolDef[] = [
       if (hits.length !== 1) throw new AppError(400, "invalid_argument", hits.length ? `More than one integration matches: ${hits.map((i) => i.name).join(", ")}` : `No connected integration "${x.integration}". Connected: ${items.map((i) => i.name).join(", ") || "none"}`);
       const r = await executePluginTool(ctx, hid, a, hits[0].id, x.tool, x.input, { channel: "agent_server", idempotencyKey: x.idempotency_key });
       return r.ok ? { done: true, result: r.data } : { done: false, status: r.status, approvalId: "approvalId" in r ? r.approvalId : undefined, message: r.message };
+    } }),
+
+  // ---- savings, assets, comments, documents ----
+  tool({ name: "list_savings_goals", description: "Savings goals with saved, remaining and percent (amounts in minor units).", shape: {}, risk: "read", run: (ctx, hid, a) => listSavingsGoals(ctx, hid, a) }),
+  tool({ name: "create_savings_goal", description: "Create a savings goal. target is in MAJOR units (₹60,000 → 60000). Bookkeeping only.",
+    shape: { name: z.string().min(1).max(120), target: z.number().positive().max(1_000_000_000), already_saved: z.number().min(0).max(1_000_000_000).default(0), target_date: IsoDateTime.optional(), idempotency_key: idem }, risk: "bounded_write",
+    run: async (ctx, hid, a, x) => { const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR"; return createSavingsGoal(ctx, hid, a, { name: x.name, targetMinor: parseDecimal(String(x.target), cur).amountMinor, savedMinor: parseDecimal(String(x.already_saved), cur).amountMinor, targetDate: x.target_date }); } }),
+  tool({ name: "add_to_savings_goal", description: "Record money set aside for a goal (positive) or taken out (negative), in MAJOR units. Bookkeeping only; it never moves money.",
+    shape: { goal: z.string().min(1).max(120).describe("Goal name or id"), amount: z.number().min(-1_000_000_000).max(1_000_000_000), idempotency_key: idem }, risk: "bounded_write",
+    run: async (ctx, hid, a, x) => { const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR"; const m = parseDecimal(String(Math.abs(x.amount)), cur).amountMinor; return addToSavingsGoal(ctx, hid, a, x.goal, x.amount < 0 ? -m : m); } }),
+  tool({ name: "list_assets", description: "Household assets (appliances, vehicles, big items) with warranty and next service dates.", shape: {}, risk: "read", run: (ctx, hid, a) => listAssets(ctx, hid, a) }),
+  tool({ name: "create_asset", description: "Add an asset so maintenance and warranty can be tracked.",
+    shape: { name: z.string().min(1).max(120), category: z.string().max(40).optional(), brand: z.string().max(60).optional(), model: z.string().max(60).optional(), location: z.string().max(80).optional(), purchase_date: IsoDateTime.optional(), warranty_expires_at: IsoDateTime.optional(), service_interval_days: z.number().int().min(1).max(3650).optional(), idempotency_key: idem }, risk: "reversible_write",
+    run: (ctx, hid, a, x) => createAsset(ctx, hid, a, { name: x.name, category: x.category, brand: x.brand, model: x.model, location: x.location, purchaseDate: x.purchase_date, warrantyExpiresAt: x.warranty_expires_at, serviceIntervalDays: x.service_interval_days }) }),
+  tool({ name: "list_task_comments", description: "Comments on a task, oldest first.", shape: { task_id: z.string().max(128) }, risk: "read", run: (ctx, hid, a, x) => listTaskComments(ctx, hid, a, x.task_id) }),
+  tool({ name: "add_task_comment", description: "Add a comment to a task (visible to adults and the assignee).", shape: { task_id: z.string().max(128), body: z.string().min(1).max(2000), idempotency_key: idem }, risk: "reversible_write", run: (ctx, hid, a, x) => addTaskComment(ctx, hid, a, x.task_id, x.body) }),
+  tool({ name: "list_documents", description: "Document records (title, category, expiry) the person may see — never file contents. Use expiring_within_days for renewals.",
+    shape: { category: z.string().max(60).optional(), expiring_within_days: z.number().int().min(0).max(3650).optional(), limit: z.number().int().min(1).max(100).default(30) }, risk: "read",
+    run: (ctx, hid, a, x) => listDocuments(ctx, hid, a, { category: x.category, expiringWithinDays: x.expiring_within_days, limit: x.limit }) }),
+
+  // ---- people and payments: always held for a person's approval, then run as that person ----
+  tool({ name: "invite_member", description: "Propose inviting someone to the household. ALWAYS needs a manager's approval; once approved the invitation is created and shown in Family (you never see or send the link).",
+    shape: { email: z.string().email().max(254), role: z.enum(["admin", "adult", "child", "staff"]), display_name: z.string().max(120).optional() }, risk: "sensitive", sensitive: "external_message",
+    run: async (ctx, hid, a, x) => { const r = await inviteMember(ctx, a, hid, InviteInput.parse({ email: x.email, role: x.role, displayName: x.display_name })); return { invitationId: r.invitationId, expiresAt: r.expiresAt }; } }),
+  tool({ name: "change_member_role", description: "Propose changing a member's role (admin, adult, child, staff). ALWAYS needs approval from an owner or administrator.",
+    shape: { member: z.string().min(1).max(120).describe("Member's name or id"), role: z.enum(["admin", "adult", "child", "staff"]) }, risk: "sensitive", sensitive: "irreversible",
+    run: async (ctx, hid, a, x) => { const m = await findMember(ctx, hid, x.member); await changeMemberRole(ctx, a, hid, m.uid, { role: x.role }); return { member: m.name, role: x.role }; } }),
+  tool({ name: "record_bill_payment", description: "Propose recording that a bill was paid (amount in MAJOR units, paid date, method). ALWAYS needs a person's approval and is bookkeeping only: HomeHub never pays anything. Do not use unless the person says they already paid.",
+    shape: { bill: z.string().min(1).max(128).describe("Bill name or id"), amount: z.number().positive().max(100_000_000), paid_at: IsoDateTime, method: z.enum(["cash", "upi", "card", "bank_transfer", "wallet", "other"]), reference: z.string().max(120).optional(), idempotency_key: idem }, risk: "sensitive", sensitive: "payment",
+    run: async (ctx, hid, a, x) => {
+      const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR";
+      const bills = (await listBills(ctx, hid, a)) as unknown as Array<{ id: string; name: string }>;
+      const hit = bills.find((b) => b.id === x.bill) ?? (() => { const c = bills.filter((b) => b.name.toLowerCase().includes(x.bill.toLowerCase())); return c.length === 1 ? c[0] : undefined; })();
+      if (!hit) throw new AppError(400, "invalid_argument", `Say which bill. Yours: ${bills.map((b) => b.name).join(", ")}`);
+      return recordBillPayment(ctx, hid, a, hit.id, BillPaymentInput.parse({ amountMinor: parseDecimal(String(x.amount), cur).amountMinor, currency: cur, paidAt: x.paid_at, method: x.method, reference: x.reference, idempotencyKey: x.idempotency_key ?? `agent-pay-${hit.id}-${x.paid_at}` }));
     } }),
 
   // ---- reports ----

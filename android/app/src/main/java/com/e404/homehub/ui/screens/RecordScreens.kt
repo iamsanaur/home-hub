@@ -332,3 +332,34 @@ fun NotesScreen() {
         }
     }
 }
+
+@Composable
+fun AssetsScreen() = RecordListScreen(RecordSpec(
+    "Assets", "assets", Icons.Outlined.Build, "No assets yet", "Add appliances, vehicles and big items so servicing and warranties can be tracked.",
+    fields = listOf(
+        Field.Text("name", "Asset"), Field.Choice("category", "Category", listOf("Appliance" to "Appliance", "Vehicle" to "Vehicle", "Electronics" to "Electronics", "Furniture" to "Furniture", "Other" to "Other")),
+        Field.Text("brand", "Brand", optional = true), Field.Text("model", "Model", optional = true), Field.Text("location", "Location", optional = true),
+        Field.Date("purchaseDate", "Purchased", optional = true), Field.Date("warrantyExpiresAt", "Warranty until", optional = true), Field.Date("nextServiceAt", "Next service", optional = true),
+    ),
+    canRead = { it.role.isAdultPlus || it.role.id == "child" },
+    groupBy = { it.s("category") ?: "Other" },
+    rowSubtitle = { r, ctx -> listOfNotNull(listOfNotNull(r.s("brand"), r.s("model")).joinToString(" ").ifEmpty { null }, r.s("location"), r.t("warrantyExpiresAt")?.let { "warranty to ${Dates.shortDate(it, ctx.zone)}" }, r.t("nextServiceAt")?.let { "service ${Dates.shortDate(it, ctx.zone)}" }).joinToString(" · ").ifEmpty { null } },
+    badge = { r, _ -> r.t("warrantyExpiresAt")?.let { if (it.isBefore(java.time.Instant.now())) "Out of warranty" to Tone.Neutral else null } },
+    defaults = mapOf("nextServiceAt" to null, "serviceIntervalDays" to null),
+))
+
+@Composable
+fun SavingsGoalsScreen() {
+    val h = LocalHousehold.current
+    RecordListScreen(RecordSpec(
+        "Savings goals", "savingsGoals", Icons.Outlined.Weekend, "No savings goals", "Set a target and track what you have put aside. HomeHub only records it, it never moves money.",
+        fields = listOf(Field.Text("name", "Goal"), Field.Amount("targetMinor", "Target", optional = false), Field.Amount("savedMinor", "Saved so far"), Field.Date("targetDate", "Target date", optional = true)),
+        canRead = { it.canFinance }, canWrite = { it.canFinance },
+        rowSubtitle = { r, ctx ->
+            val t = r.l("targetMinor") ?: 0L; val v = r.l("savedMinor") ?: 0L
+            listOfNotNull("${Money.format(v, ctx.currency)} of ${Money.format(t, ctx.currency)}" + if (t > 0) " · ${minOf(100L, v * 100 / t)}%" else "", r.t("targetDate")?.let { "by ${Dates.shortDate(it, ctx.zone)}" }).joinToString(" · ")
+        },
+        badge = { r, _ -> if ((r.l("targetMinor") ?: 0L) > 0 && (r.l("savedMinor") ?: 0L) >= (r.l("targetMinor") ?: 0L)) "Reached" to Tone.Success else null },
+        defaults = mapOf("currency" to h.currency, "savedMinor" to 0L, "targetDate" to null),
+    ))
+}

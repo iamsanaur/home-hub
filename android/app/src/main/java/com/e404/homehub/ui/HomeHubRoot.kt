@@ -98,6 +98,8 @@ import com.e404.homehub.ui.screens.FinanceScreen
 import com.e404.homehub.ui.screens.HomeScreen
 import com.e404.homehub.ui.screens.InsightsScreen
 import com.e404.homehub.ui.screens.InventoryScreen
+import com.e404.homehub.ui.screens.AssetsScreen
+import com.e404.homehub.ui.screens.SavingsGoalsScreen
 import com.e404.homehub.ui.screens.MaintenanceScreen
 import com.e404.homehub.ui.screens.ManageScreen
 import com.e404.homehub.ui.screens.MealsScreen
@@ -116,7 +118,7 @@ import dev.chrisbanes.haze.hazeSource
 object Routes {
     const val HOME = "home"; const val MANAGE = "manage"; const val AI = "ai"; const val FAMILY = "family"; const val INSIGHTS = "insights"
     const val TASKS = "tasks"; const val CLEANING = "cleaning"; const val SHOPPING = "shopping"; const val PANTRY = "pantry"; const val MEALS = "meals"
-    const val FINANCE = "finance"; const val BILLS = "bills"; const val MAINTENANCE = "maintenance"; const val INVENTORY = "inventory"
+    const val FINANCE = "finance"; const val BILLS = "bills"; const val MAINTENANCE = "maintenance"; const val INVENTORY = "inventory"; const val ASSETS = "assets"; const val SAVINGS = "savings"
     const val CALENDAR = "calendar"; const val DOCUMENTS = "documents"; const val NOTES = "notes"; const val APPROVALS = "approvals"
     const val NOTIFICATIONS = "notifications"; const val SETTINGS = "settings"; const val CONFLICTS = "conflicts"
     const val CONNECTIONS = "connections"; const val MODEL_ACCOUNTS = "model-accounts"; const val INTEGRATIONS = "integrations"; const val DEVICES = "devices"
@@ -211,6 +213,8 @@ private fun MainShell(vm: AppViewModel, deepLink: String?, onDeepLinkHandled: ()
                     composable(Routes.BILLS) { BillsScreen() }
                     composable(Routes.MAINTENANCE) { MaintenanceScreen() }
                     composable(Routes.INVENTORY) { InventoryScreen() }
+                    composable(Routes.ASSETS) { AssetsScreen() }
+                    composable(Routes.SAVINGS) { SavingsGoalsScreen() }
                     composable(Routes.CALENDAR) { CalendarScreen() }
                     composable(Routes.DOCUMENTS) { DocumentsScreen() }
                     composable(Routes.NOTES) { NotesScreen() }

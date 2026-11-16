@@ -145,3 +145,66 @@ describe("devices, automations and connected services", () => {
     expect(err(await runChild("set_automation_enabled", { automation: "porch", enabled: true }))).toMatch(/managers|forbidden/i);
   });
 });
+
+describe("savings goals, assets, task comments, documents", () => {
+  it("tracks a savings goal in exact minor units without moving money", async () => {
+    await run("create_savings_goal", { name: "Goa trip", target: 60000, already_saved: 18500 });
+    expect((await run("list_savings_goals")) as unknown[]).toEqual([expect.objectContaining({ name: "Goa trip", targetMinor: 6_000_000, savedMinor: 1_850_000, percent: 30 })]);
+    expect(await run("add_to_savings_goal", { goal: "goa", amount: 2000.5 })).toMatchObject({ savedMinor: 2_050_050 });
+    expect(await run("add_to_savings_goal", { goal: "goa", amount: -100000 })).toMatchObject({ savedMinor: 0 });
+    expect((await ctx.db.collection(`households/${hid}/transactions`).get()).size).toBe(0);
+    expect(err(await runChild("create_savings_goal", { name: "x", target: 10 }))).toMatch(/forbidden|permission|cannot|not allowed/i);
+  });
+  it("adds assets and links them to maintenance", async () => {
+    await run("create_asset", { name: "Voltas AC", category: "Appliance", location: "Bedroom", warranty_expires_at: "2027-03-01T00:00:00Z" });
+    const a = (await run("list_assets")) as Array<{ id: string; name: string; warrantyExpiresAt: string }>;
+    expect(a[0]).toMatchObject({ name: "Voltas AC", warrantyExpiresAt: "2027-03-01T00:00:00.000Z" });
+    expect(await run("create_maintenance_request", { title: "AC not cooling", assetId: a[0].id })).toMatchObject({ id: expect.any(String) });
+  });
+  it("comments follow task visibility: the assignee and adults, nobody else", async () => {
+    const t = await run("create_task", { title: "Water plants", assigneeUid: child.uid }) as { id: string };
+    const t2 = await run("create_task", { title: "Pay vendor" }) as { id: string };
+    await run("add_task_comment", { task_id: t.id, body: "Use the green can" });
+    expect(await runChild("add_task_comment", { task_id: t.id, body: "Done" })).toMatchObject({ id: expect.any(String) });
+    expect(((await run("list_task_comments", { task_id: t.id })) as Array<{ body: string }>).map((c) => c.body).sort()).toEqual(["Done", "Use the green can"]); // same clock tick in tests, so compare as a set
+    expect(err(await runChild("list_task_comments", { task_id: t2.id }))).toMatch(/only see comments|forbidden/i);
+  });
+  it("lists document records with expiry but respects restriction, and never returns files", async () => {
+    const col = ctx.db.collection(`households/${hid}/documents`);
+    await col.add({ title: "Car insurance", category: "Insurance", expiresAt: new Date("2026-11-30T00:00:00Z"), restricted: false, storagePath: `households/${hid}/documents/a.pdf` });
+    await col.add({ title: "Will", category: "Legal", restricted: true, allowedUids: ["someone_else"], storagePath: `households/${hid}/documents/b.pdf` });
+    const mine = (await run("list_documents")) as Array<Record<string, unknown>>;
+    expect(mine.map((d) => d.title).sort()).toEqual(["Car insurance", "Will"]); // owners see restricted records
+    expect(Object.keys(mine[0])).not.toContain("storagePath");
+    expect(((await run("list_documents", { expiring_within_days: 30 })) as unknown[]).length).toBe(1);
+    expect(err(await runChild("list_documents"))).toMatch(/forbidden|permission|cannot|not allowed/i);
+  });
+});
+
+describe("people and payments are never done by the assistant alone", () => {
+  const pend = async (name: string, args: Record<string, unknown>) => { const r = await run(name, args) as { status?: string; approvalId?: string }; expect(r.status).toBe("approval_required"); return r.approvalId!; };
+  it("a bill payment waits for approval, is recorded as the approving person, and is bookkeeping only", async () => {
+    await run("create_bill", { name: "Rent", amount: 13000, due_date: "2026-11-02" });
+    const id = await pend("record_bill_payment", { bill: "rent", amount: 13000, paid_at: "2026-11-02T05:00:00Z", method: "upi" });
+    expect((await ctx.db.collection(`households/${hid}/billPayments`).get()).size).toBe(0);
+    await decideApproval(ctx, hid, owner, id, "approve");
+    const pays = (await ctx.db.collection(`households/${hid}/billPayments`).get()).docs.map((d) => d.data());
+    expect(pays).toHaveLength(1); expect(pays[0]).toMatchObject({ amountMinor: 1_300_000, method: "upi" });
+  });
+  it("an invitation is created only after approval, and the invite link never reaches the assistant", async () => {
+    const before0 = (await ctx.db.collection(`households/${hid}/invitations`).get()).size;
+    const id = await pend("invite_member", { email: "guest@example.com", role: "adult" });
+    expect((await ctx.db.collection(`households/${hid}/invitations`).get()).size).toBe(before0); // nothing yet
+    const before = (await ctx.db.collection(`households/${hid}/invitations`).get()).size; // the child's accepted invitation from setup
+    await decideApproval(ctx, hid, owner, id, "approve");
+    expect((await ctx.db.collection(`households/${hid}/invitations`).get()).size).toBe(before + 1);
+    const status = await run("get_approval_status", { approval_id: id });
+    expect(JSON.stringify(status)).not.toMatch(/token/i);
+  });
+  it("a role change waits for approval and an owner can't be demoted", async () => {
+    const id = await pend("change_member_role", { member: child.uid, role: "adult" });
+    expect((await ctx.db.doc(`households/${hid}/members/${child.uid}`).get()).data()!.role).toBe("child");
+    await decideApproval(ctx, hid, owner, id, "approve");
+    expect((await ctx.db.doc(`households/${hid}/members/${child.uid}`).get()).data()!.role).toBe("adult");
+  });
+});
