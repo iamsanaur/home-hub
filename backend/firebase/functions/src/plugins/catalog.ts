@@ -2,10 +2,11 @@ import { HomeHubPlugin } from "./sdk";
 import { validateManifest } from "./manifest";
 import { demoDevices } from "./builtins/demoDevices";
 import { webhook } from "./builtins/webhook";
+import { homeAssistant } from "./builtins/homeAssistant";
 import { aiProviderPlugins } from "./builtins/aiProviders";
 
 /** Plugins with real, tested implementations. Only these can be connected. */
-export const BUILTIN_PLUGINS: HomeHubPlugin[] = [demoDevices, webhook, ...aiProviderPlugins];
+export const BUILTIN_PLUGINS: HomeHubPlugin[] = [demoDevices, homeAssistant, webhook, ...aiProviderPlugins];
 export const PLUGIN_INDEX = new Map(BUILTIN_PLUGINS.map((p) => [p.manifest.id, p]));
 
 // Fail fast if a built-in manifest ever violates the safety rules.
@@ -37,8 +38,7 @@ export interface CatalogEntry {
 /** Addendum §4 targets without an implementation yet — listed honestly as planned. */
 const PLANNED: Array<[string, string, string, string, string?]> = [
   // id, name, category, supportLevel, note
-  ["homeassistant", "Home Assistant", "smart_home", "bridge", "Phase 2 — recommended bridge for Matter, Zigbee, Z-Wave and LAN devices."],
-  ["matter", "Matter", "smart_home", "bridge", "Phase 2 — via a Matter controller/bridge."],
+  ["matter", "Matter (direct)", "smart_home", "bridge", "Matter devices already work through Home Assistant; a direct Matter controller is planned."],
   ["google-home", "Google Home", "smart_home", "official_api", "Where Google Home APIs are available."],
   ["smartthings", "Samsung SmartThings", "smart_home", "official_api"],
   ["apple-home", "Apple Home (via bridge)", "smart_home", "bridge", "Through a HomeKit-compatible bridge; Android cannot use Apple-only APIs."],

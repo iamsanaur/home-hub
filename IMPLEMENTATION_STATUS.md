@@ -41,6 +41,10 @@ Screenshots: `tests/evidence/android/`, `tests/evidence/ios/` (Connections: `tes
 - Verified in production: Android listener → upload → inbox → confirm → Finance (₹640 Zepto, Groceries); iOS review/confirm UI test (₹385 Uber India, Transport). Tests: 15 parser + 3 integration + 1 rules (backend), 2 Android JVM, 2 iOS unit.
 - **Limitation — Android 15+**: the system redacts notifications it classifies as sensitive ("Sensitive notification content hidden") for non-system listeners. Bank SMS alerts carrying account/reference numbers are often redacted; UPI app notifications ("Paid ₹640 to Zepto") come through. Bank-SMS coverage on Android needs Account Aggregator (partner) later.
 
+## Home Assistant bridge (16 Nov 2026) — Phase 2
+- Plugin `homehub.homeassistant` (`plugins/builtins/homeAssistant.ts`): household's own Home Assistant over HTTPS (Nabu Casa or own domain) with a long-lived token in Secret Manager. Imports light, switch, fan, climate, lock, door/window/motion binary sensors and temperature/humidity sensors; rooms from Home Assistant areas; °F→°C. Same tool names as other device plugins, so app control, automations, Alexa and approvals work unchanged; unlock stays approval-only and children/staff can't use locks. Every write is read back before HomeHub reports success; the scheduler re-syncs every 15 minutes.
+- Tests: 5 emulator tests against a fake Home Assistant (import/mapping, verified control, unlock approval, background sync, https-only and bad token). Deployed; listed as available in the production catalog. Not yet tried against a real Home Assistant instance.
+
 ## Done
 - Repo structure, branding from `brand-logo.png` (iOS AppIcon, Android adaptive + monochrome icon, splash, in-app mark).
 - Firestore + Storage security rules (deny by default, membership/role checks, finance privacy, staff isolation, immutable fields, version bumps, append-only ledgers, server-only agent data). Indexes.

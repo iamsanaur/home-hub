@@ -461,3 +461,28 @@ export async function receiveWebhook(
   await integrationRef(ctx, hid, iid).update({ lastEventAt: ts(ctx.now()) });
   return events;
 }
+
+/**
+ * Background refresh for bridge plugins (Home Assistant): runs from the 15-minute scheduler so device
+ * state, rooms and new devices stay current between app actions. Read-only and system-initiated, so
+ * it doesn't write a per-run audit event; failures are recorded on the integration (lastError).
+ */
+export async function syncBridgeIntegrations(ctx: Ctx, deps: RuntimeDeps = {}, limit = 50): Promise<{ synced: number; failed: number }> {
+  const snap = await ctx.db.collectionGroup("integrations").where("pluginId", "==", "homehub.homeassistant").where("status", "==", "connected").limit(limit).get();
+  let synced = 0, failed = 0;
+  for (const doc of snap.docs) {
+    const hid = doc.ref.parent.parent!.id;
+    const d = doc.data();
+    const plugin = PLUGIN_INDEX.get(d.pluginId);
+    if (!plugin?.handlers.tools.sync_devices || d.paused) continue;
+    try {
+      await plugin.handlers.tools.sync_devices(buildContext(ctx, hid, doc.id, plugin, d.config ?? {}, deps), {});
+      await doc.ref.update({ lastSyncAt: ts(ctx.now()), lastError: null });
+      synced++;
+    } catch (e) {
+      await doc.ref.update({ lastError: String((e as Error).message ?? e).slice(0, 200), lastSyncAt: ts(ctx.now()) });
+      failed++;
+    }
+  }
+  return { synced, failed };
+}

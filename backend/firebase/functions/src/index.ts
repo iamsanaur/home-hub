@@ -93,7 +93,9 @@ export const scheduler = onSchedule(
     const billAutomations = await runBillDueAutomations(ctx).catch((e) => { logger.error("bill automations", e); return 0; });
     const expired = await expireApprovals(ctx);
     const reconciled = await reconcileStaleWorkflows(ctx, h);
-    logger.info("scheduler", { jobs: jobs.length, automations, billAutomations, expired, reconciled });
+    const { syncBridgeIntegrations } = await import("./plugins/runtime");
+    const bridges = await syncBridgeIntegrations(ctx).catch((e) => { logger.error("bridge sync", e); return { synced: 0, failed: 0 }; });
+    logger.info("scheduler", { jobs: jobs.length, automations, billAutomations, expired, reconciled, bridges });
   },
 );
 

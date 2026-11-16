@@ -99,7 +99,7 @@ export interface DeviceActionResult {
  */
 export async function executeDeviceAction(
   ctx: Ctx, hid: string, actor: Actor, deviceId: string, action: DeviceAction,
-  opts: { channel: Channel; confirmed?: boolean; origin?: EventOrigin; idempotencyKey?: string },
+  opts: { channel: Channel; confirmed?: boolean; origin?: EventOrigin; idempotencyKey?: string; deps?: import("../plugins/runtime").RuntimeDeps },
 ): Promise<DeviceActionResult> {
   const ref = ctx.db.doc(`${paths.col(hid, "devices")}/${deviceId}`);
   const snap = await ref.get();
@@ -117,7 +117,7 @@ export async function executeDeviceAction(
   // Lazy import to keep the module graph acyclic at load time.
   const { executePluginTool } = await import("../plugins/runtime");
   const r = await executePluginTool(ctx, hid, actor, dev.integrationId, tool, { deviceId: dev.externalId, ...input },
-    { channel: opts.channel, confirmed: opts.confirmed, idempotencyKey: opts.idempotencyKey, origin: opts.origin }).catch((e: AppError) => {
+    { channel: opts.channel, confirmed: opts.confirmed, idempotencyKey: opts.idempotencyKey, origin: opts.origin }, opts.deps).catch((e: AppError) => {
     if (e.code === "plugin_failed") return { ok: false as const, status: "failed" as const, message: e.message };
     throw e;
   });
@@ -128,7 +128,7 @@ export async function executeDeviceAction(
     return { status: "failed", message: r.message };
   }
   // Verify by reading the device back through the plugin (not trusting the write response).
-  const verify = await executePluginTool(ctx, hid, actor, dev.integrationId, "get_state", { deviceId: dev.externalId }, { channel: opts.channel, origin: opts.origin }).catch(() => null);
+  const verify = await executePluginTool(ctx, hid, actor, dev.integrationId, "get_state", { deviceId: dev.externalId }, { channel: opts.channel, origin: opts.origin }, opts.deps).catch(() => null);
   const state = (verify && verify.ok ? (verify.data as { state: Partial<DeviceState> }).state : null) ?? null;
   const matches = !!state && Object.entries(expect).every(([k, v]) => (state as Record<string, unknown>)[k] === v);
   await recordAuditEvent(ctx, hid, {
