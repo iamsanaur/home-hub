@@ -1,6 +1,6 @@
 # Changelog
 
-Releases are published at <https://github.com/iamsanaur/home-hub/releases>.
+No binaries are published from this repository. Build from source (see the README).
 
 ## 1.1.0 — 16 Nov 2026 (Android, versionCode 2)
 - Pay-per-delivery bills with a month ledger (milk, newspaper, maid, water cans, tiffin), exact integer money.
