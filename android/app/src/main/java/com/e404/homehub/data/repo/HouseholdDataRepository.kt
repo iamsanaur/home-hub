@@ -62,6 +62,22 @@ class HouseholdDataRepository(private val db: FirebaseFirestore, private val uid
         }.await()
     }
 
+    /** Creates many documents with the standard bookkeeping fields, in batches (Firestore allows 500 writes per batch). */
+    suspend fun createMany(hid: String, collection: String, docs: List<Map<String, Any?>>): Int {
+        val me = uid() ?: error("Signed out")
+        docs.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { fields ->
+                batch.set(db.collection("households/$hid/$collection").document(), fields + mapOf(
+                    "householdId" to hid, "createdBy" to me, "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedBy" to me, "updatedAt" to FieldValue.serverTimestamp(), "version" to 1L, "source" to "user",
+                ))
+            }
+            batch.commit().await()
+        }
+        return docs.size
+    }
+
     suspend fun delete(hid: String, collection: String, id: String) { db.document("households/$hid/$collection/$id").delete().await() }
 
     /** Append-only ledger write (pantry movements, bill payments): no version, never updated. */

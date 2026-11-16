@@ -8,6 +8,7 @@ import { recordExpense } from "./finance";
 import { createMaintenanceRequest } from "./home";
 import { createTask } from "./tasks";
 import { notify } from "./notifications";
+import { DELETABLE, deleteRecord } from "./records";
 
 /**
  * Executable approval actions. When an approval is granted, the server executes the
@@ -61,6 +62,11 @@ export const APPROVAL_ACTIONS: Record<string, Executor> = {
   share_information: {
     sensitive: "share_sensitive", manual: true,
     schema: z.object({ recipient: z.string().max(200), what: z.string().max(500) }),
+  },
+  delete_record: {
+    sensitive: "delete_important",
+    schema: z.object({ collection: z.enum(DELETABLE), id: z.string().max(128), reason: z.string().max(300).optional() }),
+    run: async (ctx, hid, actor, p: { collection: string; id: string }) => deleteRecord(ctx, hid, actor, p.collection, p.id),
   },
   delete_document: {
     sensitive: "delete_important",

@@ -281,6 +281,11 @@ service cloud.firestore {
         allow update: if canFinance(hid) && validUpdate();
         allow delete: if isManager(hid);
       }
+      // Month-by-month delivery ledgers for pay-per-delivery bills: derived data, written only by the gateway.
+      match /billLedgers/{ledgerId} {
+        allow read: if canFinance(hid);
+        allow write: if false;
+      }
       // Payment history is append-only and must be explicitly confirmed by the recorder.
       match /billPayments/{paymentId} {
         allow read: if canFinance(hid);

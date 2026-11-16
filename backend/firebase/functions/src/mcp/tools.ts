@@ -14,7 +14,10 @@ import {
   addShoppingItem, createMealPlan, createShoppingList, generateMealShoppingList, getInventory, getLowStockItems,
   getMealPlan, markItemPurchased,
 } from "../services/food";
-import { getBillStatus, getBudgetSummary, listExpenses, recordExpense } from "../services/finance";
+import { getBillStatus, getBudgetSummary, listExpenses, listBills, recordExpense } from "../services/finance";
+import { addPantryItems, PantryBulkItem } from "../services/food";
+import { createVendorBill, getBillLedger, resolveBill, setDeliveries, updateVendorBill } from "../services/vendorBills";
+import { parseDecimal } from "../core/money";
 import {
   checkScheduleConflicts, createEvent, createMaintenanceRequest, getHouseholdMembers, getHouseholdSummary,
   getMemberPermissions, listEvents, listMaintenanceRecords, scheduleServiceReminder,
@@ -41,6 +44,12 @@ export interface ToolDef<S extends z.ZodRawShape = z.ZodRawShape> {
   run: (ctx: Ctx, hid: string, actor: Actor, args: z.infer<z.ZodObject<S>>) => Promise<unknown>;
 }
 
+const billRef = {
+  bill: z.string().max(128).optional().describe("Which bill: its name, the vendor's name (e.g. 'Ramesh', 'milk') or its id. Optional when there is only one pay-per-delivery bill."),
+  bill_id: z.string().max(128).optional().describe("Bill id, if you have it"),
+  name: z.string().max(120).optional().describe("Alias of `bill`"),
+};
+const pickBill = (x: { bill?: string; bill_id?: string; name?: string }) => ({ billId: x.bill_id, name: x.bill ?? x.name });
 const grant = z.string().describe("The HomeHub grant from your instructions. Required.");
 const idem = IdempotencyKey.optional().describe("Optional key so a retried write is applied once");
 
@@ -116,6 +125,86 @@ export const TOOLS: ToolDef[] = [
     run: (ctx, hid, a, x) => { const { idempotency_key, ...e } = x; return recordExpense(ctx, hid, a, ExpenseInput.parse(e), idempotency_key); } }),
   tool({ name: "get_bill_status", description: "Bills due within N days with state upcoming|due_today|overdue|needs_attention.",
     shape: { within_days: z.number().int().min(1).max(120).default(30) }, risk: "read", run: (ctx, hid, a, x) => getBillStatus(ctx, hid, a, x.within_days) }),
+
+  tool({ name: "list_bills", description: "All active bills: id, name, vendor, amount, next due date, and for pay-per-delivery bills (milk, newspaper, maid…) the unit and rate. Use this to find a bill id.",
+    shape: {}, risk: "read", run: (ctx, hid, a) => listBills(ctx, hid, a) }),
+
+  // ---- vendor bills: pay by what was actually delivered (milk per liter, newspaper per copy, maid per day, water cans, tiffin) ----
+  tool({ name: "create_vendor_bill",
+    description: "Create a bill whose monthly amount is quantity delivered × rate, so days the vendor doesn't come are not charged. Examples: milk (unit l, ₹60/l, 1 l a day), newspaper (copies), maid or cook (days, weekdays Mon–Sat), water cans, tiffin (meals). rate_per_unit is in MAJOR units (₹60 → 60, ₹52.50 → 52.5). The bill for a month's deliveries falls due on due_day of the next month.",
+    shape: {
+      name: z.string().min(1).max(120).describe("e.g. 'Milk vendor'"), vendor: z.string().max(120).optional().describe("vendor's name"),
+      unit: z.string().min(1).max(20).default("l").describe("l, kg, copies, days, cans, meals…"),
+      rate_per_unit: z.number().positive().max(1_000_000).describe("price of ONE unit in major currency units, at most 2 decimals"),
+      default_quantity: z.number().min(0).max(1000).default(1).describe("normal quantity on a delivery day"),
+      weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).default([1, 2, 3, 4, 5, 6, 7]).describe("ISO weekdays delivered: 1=Mon … 7=Sun"),
+      due_day: z.number().int().min(1).max(28).default(5).describe("day of the following month the bill is due"),
+      category: z.string().max(60).default("Groceries"), start_month: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("first month to track, YYYY-MM (default: this month)"),
+      idempotency_key: idem,
+    }, risk: "reversible_write",
+    run: async (ctx, hid, a, x) => {
+      const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR";
+      const rateMinor = parseDecimal(String(x.rate_per_unit), cur).amountMinor;
+      return createVendorBill(ctx, hid, a, { name: x.name, vendor: x.vendor, unit: x.unit, rateMinor, defaultQuantity: x.default_quantity, weekdays: x.weekdays, dueDay: x.due_day, category: x.category, startMonth: x.start_month, idempotencyKey: x.idempotency_key });
+    } }),
+  tool({ name: "update_vendor_bill",
+    description: "Change a pay-per-delivery bill: price, normal quantity, delivery weekdays or due day. A new price applies from NEXT month unless apply_to_current_month is true. Identify the bill by bill_id or by name.",
+    shape: {
+      ...billRef,
+      rate_per_unit: z.number().positive().max(1_000_000).optional(), default_quantity: z.number().min(0).max(1000).optional(),
+      weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(), due_day: z.number().int().min(1).max(28).optional(),
+      apply_to_current_month: z.boolean().default(false),
+    }, risk: "bounded_write",
+    run: async (ctx, hid, a, x) => {
+      const bill = await resolveBill(ctx, hid, pickBill(x));
+      const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR";
+      return updateVendorBill(ctx, hid, a, bill.id, {
+        rateMinor: x.rate_per_unit !== undefined ? parseDecimal(String(x.rate_per_unit), cur).amountMinor : undefined,
+        defaultQuantity: x.default_quantity, weekdays: x.weekdays, dueDay: x.due_day, applyToCurrentMonth: x.apply_to_current_month,
+      });
+    } }),
+  tool({ name: "record_deliveries",
+    description: "Record what the vendor actually delivered. quantity 0 = did not come (not charged); a number = that quantity (extra or less); null = back to the normal schedule. Use entries for single dates and ranges for leave periods (e.g. vendor away 10–15 Nov: from 2026-11-10, to 2026-11-15, quantity 0). Dates are YYYY-MM-DD. Returns the updated month total.",
+    shape: {
+      ...billRef,
+      entries: z.array(z.object({ date: IsoDate, quantity: z.number().min(0).max(1000).nullable() })).max(62).default([]),
+      ranges: z.array(z.object({ from: IsoDate, to: IsoDate, quantity: z.number().min(0).max(1000).nullable() })).max(10).default([]),
+      // Shorthand the model often reaches for: several dates sharing one quantity (0 = did not come), or one from–to range.
+      dates: z.array(IsoDate).max(62).optional().describe("Shorthand: dates that all get `quantity`"),
+      from: IsoDate.optional(), to: IsoDate.optional(), date: IsoDate.optional().describe("Shorthand: one date that gets `quantity`"),
+      items: z.array(z.object({ quantity: z.number().min(0).max(1000).nullable().optional() }).passthrough()).max(5).optional().describe("Ignored except for a quantity when `quantity` is omitted"),
+      quantity: z.number().min(0).max(1000).nullable().optional().describe("Quantity for `dates` or from–to (0 = did not come)"),
+    }, risk: "reversible_write",
+    run: async (ctx, hid, a, x) => {
+      const bill = await resolveBill(ctx, hid, pickBill(x));
+      const q = x.quantity !== undefined ? x.quantity : (x.items?.[0]?.quantity ?? 0);
+      // Explicit entries win; the shorthand only adds dates the entries don't already cover.
+      const covered = new Set(x.entries.map((e) => e.date));
+      const all = [...x.entries, ...[...(x.dates ?? []), ...(x.date ? [x.date] : [])].filter((d) => !covered.has(d)).map((date) => ({ date, quantity: q }))];
+      if (x.from) x.ranges.push({ from: x.from, to: x.to ?? x.from, quantity: q });
+      if (!all.length && !x.ranges.length) throw new AppError(400, "invalid_argument", 'Nothing to record. Send entries:[{"date":"2026-11-03","quantity":0}] and/or ranges:[{"from":"2026-11-09","to":"2026-11-11","quantity":0}]');
+      for (const r of x.ranges) {
+        let d = DateTime.fromISO(r.from, { zone: "utc" }); const end = DateTime.fromISO(r.to, { zone: "utc" });
+        if (end < d || end.diff(d, "days").days > 61) throw new AppError(400, "invalid_argument", "Each range must be 1–62 days and end after it starts");
+        for (; d <= end; d = d.plus({ days: 1 })) all.push({ date: d.toISODate()!, quantity: r.quantity });
+      }
+      return setDeliveries(ctx, hid, a, bill.id, all);
+    } }),
+  tool({ name: "get_bill_ledger",
+    description: "A pay-per-delivery bill for one month (YYYY-MM, default: the month being collected): each day's quantity, how many days were skipped, quantity delivered, the charge so far and the month's total in minor units.",
+    shape: { ...billRef, month: z.string().regex(/^\d{4}-\d{2}$/).optional() }, risk: "read",
+    run: async (ctx, hid, a, x) => {
+      const bill = await resolveBill(ctx, hid, pickBill(x));
+      const l = await getBillLedger(ctx, hid, a, bill.id, x.month);
+      // Compact for the model: list only the days that differ from the normal schedule.
+      return { bill: l.bill, month: l.month, paid: l.paid, dueAt: l.dueAt, totals: l.totals, exceptions: l.days.filter((d) => d.status === "skipped" || d.status === "extra" || (d.scheduled && d.quantity !== l.bill.defaultQuantity)).map((d) => ({ date: d.date, quantity: d.quantity, status: d.status })) };
+    } }),
+
+  // ---- pantry in bulk ----
+  tool({ name: "add_pantry_items",
+    description: "Add several items to the pantry in one call (up to 100). Items already in the pantry with the same name and unit have the quantity added instead of duplicated. Convert the user's wording into items yourself, e.g. '2 kg rice, milk 2 l, a dozen eggs' → [{name:'Rice',quantity:2,unit:'kg'},{name:'Milk',quantity:2,unit:'l'},{name:'Eggs',quantity:1,unit:'dozen'}]. Units: pcs, kg, g, l, ml, pack, dozen, bunch.",
+    shape: { items: z.array(PantryBulkItem).min(1).max(100), idempotency_key: idem }, risk: "reversible_write",
+    run: (ctx, hid, a, x) => idempotent(ctx, { hid, uid: a.uid, op: "add_pantry_items" }, x.idempotency_key, () => addPantryItems(ctx, hid, a, x.items) as Promise<Record<string, unknown>>) }),
 
   // ---- maintenance ----
   tool({ name: "list_maintenance_records", description: "Maintenance requests and service records.",

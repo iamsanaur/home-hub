@@ -35,8 +35,10 @@ describe("MCP server contract", () => {
       "get_meal_plan", "create_meal_plan", "generate_meal_shopping_list", "get_budget_summary", "list_expenses", "record_expense", "get_bill_status",
       "list_maintenance_records", "create_maintenance_request", "schedule_service_reminder", "list_events", "create_event", "check_schedule_conflicts",
       "request_approval", "list_pending_approvals", "get_approval_status", "get_household_report", "get_agent_usage_report"];
-    expect(tools.map((t) => t.name).sort()).toEqual([...SPEC].sort());
-    expect(TOOLS.length).toBe(31);
+    // Documented extensions beyond the brief: vendor bills (pay per delivery), bill listing and bulk pantry entry.
+    const EXTENSIONS = ["list_bills", "create_vendor_bill", "update_vendor_bill", "record_deliveries", "get_bill_ledger", "add_pantry_items"];
+    expect(tools.map((t) => t.name).sort()).toEqual([...SPEC, ...EXTENSIONS].sort());
+    expect(TOOLS.length).toBe(SPEC.length + EXTENSIONS.length);
     for (const t of tools) expect((t.inputSchema as { required?: string[] }).required).toContain("grant");
     expect(tools.some((t) => /householdId|household_id/.test(JSON.stringify(t.inputSchema)))).toBe(false);
     await client.close();

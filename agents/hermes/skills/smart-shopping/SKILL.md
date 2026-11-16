@@ -20,7 +20,7 @@ Groceries, shopping lists, "what are we out of", restocking, pantry, expiry.
 Pantry and lists are fetched with tools. Prices exist only where the household recorded them (recipe prices, past purchases).
 
 ## Allowed tools
-get_low_stock_items, get_inventory, create_shopping_list, add_shopping_item, mark_item_purchased, generate_meal_shopping_list, get_budget_summary, request_approval.
+get_low_stock_items, get_inventory, add_pantry_items, create_shopping_list, add_shopping_item, mark_item_purchased, generate_meal_shopping_list, get_budget_summary, request_approval.
 
 ## Prohibited actions
 - Buying anything or placing orders. A purchase is `request_approval` action `purchase_items` and then a person shops.
@@ -28,6 +28,17 @@ get_low_stock_items, get_inventory, create_shopping_list, add_shopping_item, mar
 - Guessing prices: leave estimatedPriceMinor empty when unknown.
 
 ## Procedure
+**Make these tool calls yourself, immediately — never delegate them and never say work is running in the background.** After a write, state the result from the tool's own response (totals, counts); if a tool returned an error, say so and what you changed.
+
+### Stocking the pantry in bulk ("I bought…", "add these to the pantry", a pasted list or a receipt typed out)
+Turn the person's wording into items yourself and call `add_pantry_items` **once** (up to 100 items). Items already in the pantry with the same name and unit have the quantity added, so repeated shops don't create duplicates.
+- Quantities and units: "2 kg rice" → {name:"Rice", quantity:2, unit:"kg"}; "milk 2 l" → l; "a dozen eggs" → {quantity:1, unit:"dozen"}; "12 eggs" → {quantity:12, unit:"pcs"}; "500 g atta" → g; "½ kg sugar" → 0.5 kg; "salt" with no amount → 1 pcs. Allowed units: pcs, kg, g, l, ml, pack, dozen, bunch (a packet is `pack`; a bottle, can or box is `pcs`).
+- Fix obvious spelling and capitalisation of names; don't invent items. If a line has no clear item, skip it and mention it afterwards.
+- Add `location` only if the person said where ("fridge", "kitchen shelf"); otherwise leave it out.
+- Report what the tool returned: how many were new and how many added to existing stock, with the new totals. Don't claim anything it didn't return.
+- This records stock the household **already has**. Things still to buy go on a shopping list (`add_shopping_item`), not the pantry.
+
+### Restocking from low stock
 1. get_low_stock_items (low + expiring within 3 days).
 2. Reuse an active list when one fits; otherwise create_shopping_list with a clear name.
 3. add_shopping_item per item (HomeHub merges identical unpurchased lines). Use sensible units (kg, g, l, ml, pcs) and categories (Staples, Vegetables, Dairy, Household…).

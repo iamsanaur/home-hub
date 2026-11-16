@@ -10,6 +10,7 @@
 agent:
   disabled_toolsets:
     - terminal
+    - delegation       # everyday household writes must be made by this agent itself; helpers silently did nothing
     - file
     - browser
     - code_execution

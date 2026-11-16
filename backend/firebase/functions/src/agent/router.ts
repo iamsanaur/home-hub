@@ -14,6 +14,8 @@ export type Route =
 
 const RULES: Array<{ skill: SkillName; words: RegExp }> = [
   { skill: "approval-manager", words: /\b(approv\w*|pending requests?|reject)\b/ },
+  // Vendors paid by what they deliver or how many days they work (milk per liter, newspaper, maid, tiffin…) — before meal/shopping words.
+  { skill: "finance-manager", words: /\b(vendors?|milk ?(man|vendor)|paper ?(boy|man)|newspapers?|maid|nanny|driver|tiffin|dabba|water (can|jar|bottle)s?|deliver\w*|per (liter|litre|day|copy|can|meal)|(milk|cook|maid|vendor|newspaper)\b.*\b(didn'?t|did not|not|never|skipped|absent|leave|holiday|came|come|arrive\w*)|(didn'?t|did not|not|skipped|no) (come|arrive|deliver\w*|show)|\b(got|received|came with|delivered)\b.*\b(extra|less|fewer|half|double)\b)/ },
   { skill: "meal-planner", words: /\b(meal|meals|dinner|lunch|breakfast|recipe|menu|cook|snack|diet)\w*/ },
   { skill: "smart-shopping", words: /\b(grocer\w*|shopping|buy|pantry|stock|restock|supermarket|list)\b/ },
   { skill: "finance-manager", words: /\b(budget|expense|spend\w*|money|income|saving\w*|bill|bills|cost|paid|pay)\b/ },
@@ -43,7 +45,8 @@ export function route(message: string): Route {
   const skill = hits[0]?.skill ?? "household-manager";
   if (skill === "home-maintenance") return { kind: "agent", skill, tier: "complex", workflow: "maintenance_coordination" };
   // Several domains in one request, or long requests, deserve stronger reasoning.
-  const tier = hits.length >= 3 || m.length > 400 ? "complex" : "simple";
+  // Vendor/metered-bill requests need multi-field tool calls that the economical model gets wrong (it drops `grant`).
+  const tier = hits.length >= 3 || m.length > 400 || (hits[0] === RULES[0] && skill === "finance-manager") ? "complex" : "simple";
   return { kind: "agent", skill, tier };
 }
 

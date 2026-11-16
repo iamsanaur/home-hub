@@ -8,6 +8,7 @@ import {
   Actor, audit, Ctx, idempotent, invalid, notFound, paths, requireCapability, ts,
 } from "./base";
 import { createDoc, toIso } from "./docs";
+import { closeCycleInTransaction } from "./vendorBills";
 
 async function hh(ctx: Ctx, hid: string) {
   const snap = await ctx.db.doc(paths.household(hid)).get();
@@ -187,8 +188,10 @@ export async function recordBillPayment(
       const snap = await tx.get(billRef);
       if (!snap.exists) throw notFound("Bill");
       const bill = snap.data()!;
-      let nextDue: string | null = null;
-      if (bill.recurrence && bill.nextDueAt) {
+      // Pay-per-delivery bills close the month that was paid and open the next one.
+      const cycle = bill.kind === "metered" ? await closeCycleInTransaction(ctx, tx, hid, billId, bill, timezone, input.amountMinor, payRef.id) : null;
+      let nextDue: string | null = cycle ? cycle.nextDueAt.toDate().toISOString() : null;
+      if (!cycle && bill.recurrence && bill.nextDueAt) {
         nextDue = nextOccurrence(bill.recurrence as RecurrenceRule,
           (bill.seriesStartAt ?? bill.nextDueAt).toDate().toISOString(), timezone, bill.nextDueAt.toDate().toISOString());
       }
@@ -205,6 +208,7 @@ export async function recordBillPayment(
         createdBy: actor.uid, createdAt: now, updatedBy: actor.uid, updatedAt: now, version: 1, source: "user",
       });
       tx.update(billRef, {
+        ...(cycle ? { meter: cycle.meter, amountMinor: cycle.amountMinor } : {}),
         lastPaidAt: Timestamp.fromDate(new Date(input.paidAt)),
         lastPaymentId: payRef.id,
         nextDueAt: nextDue ? Timestamp.fromDate(new Date(nextDue)) : bill.nextDueAt,
@@ -216,5 +220,19 @@ export async function recordBillPayment(
     });
     await audit(ctx, hid, actor, "bills.payment_recorded", { type: "bill", id: billId }, { amountMinor: input.amountMinor });
     return result;
+  });
+}
+
+/** Every active bill (not just those due soon), so people and the assistant can find a bill by name. */
+export async function listBills(ctx: Ctx, hid: string, actor: Actor) {
+  await requireCapability(ctx, hid, actor.uid, "finance.read");
+  const snap = await ctx.db.collection(paths.col(hid, "bills")).limit(200).get();
+  return snap.docs.filter((d) => d.data().active !== false).map((d) => {
+    const x = d.data();
+    return {
+      id: d.id, name: x.name, vendor: x.provider ?? null, category: x.category ?? null, amountMinor: x.amountMinor, currency: x.currency, nextDueAt: toIso(x.nextDueAt),
+      kind: x.kind ?? "fixed",
+      ...(x.kind === "metered" && x.meter ? { meter: { unit: x.meter.unit, rateMinor: x.meter.rateMinor, defaultQuantity: x.meter.defaultQuantity, weekdays: x.meter.weekdays, dueDay: x.meter.dueDay, monthBeingCollected: x.meter.cycleMonth } } : {}),
+    };
   });
 }

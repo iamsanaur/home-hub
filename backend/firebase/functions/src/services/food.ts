@@ -292,3 +292,50 @@ export async function generateMealShoppingList(
     estimate: { totalMinor, currency, unpricedItems: unpriced, basis: "recipe prices and last purchase prices only" },
   };
 }
+
+export const PantryBulkItem = z.object({
+  name: z.string().trim().min(1).max(60),
+  quantity: z.number().positive().max(100_000),
+  unit: z.string().trim().min(1).max(20).default("pcs"),
+  location: z.string().trim().max(60).optional(),
+  minQuantity: z.number().min(0).max(100_000).optional(),
+});
+
+/**
+ * Adds many pantry items at once. An item already in the pantry (same name and unit) has the quantity added and a
+ * "restock" movement recorded, instead of creating a duplicate. Same item twice in one request is combined.
+ */
+export async function addPantryItems(ctx: Ctx, hid: string, actor: Actor, rawItems: Array<z.infer<typeof PantryBulkItem>>) {
+  const m = await requireMember(ctx, hid, actor.uid);
+  if (!can(m, "pantry.write")) throw forbidden("You cannot change the pantry");
+  if (rawItems.length === 0 || rawItems.length > 100) throw invalid("Send between 1 and 100 items");
+  const wanted = new Map<string, z.infer<typeof PantryBulkItem>>();
+  for (const i of rawItems) {
+    const k = `${normalizeName(i.name)}|${i.unit.toLowerCase()}`;
+    const prev = wanted.get(k);
+    wanted.set(k, prev ? { ...prev, quantity: Math.round((prev.quantity + i.quantity) * 1000) / 1000 } : { ...i, unit: i.unit.toLowerCase() });
+  }
+  const existing = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+  (await ctx.db.collection(paths.col(hid, "pantryItems")).limit(1000).get()).docs.forEach((d) => existing.set(`${d.data().nameKey ?? normalizeName(String(d.data().name))}|${String(d.data().unit).toLowerCase()}`, d));
+  const results: Array<{ name: string; quantity: number; unit: string; action: "created" | "added_to_existing"; nowQuantity: number }> = [];
+  for (const [k, i] of wanted) {
+    const hit = existing.get(k);
+    if (hit) {
+      const next = Math.round((Number(hit.data().quantity) + i.quantity) * 1000) / 1000;
+      const min = hit.data().minQuantity ?? null;
+      await updateDoc(ctx, hid, "pantryItems", hit.id, actor, { quantity: next, lowStock: min !== null && next <= min });
+      await ctx.db.collection(paths.col(hid, "pantryMovements")).add({
+        householdId: hid, createdBy: actor.uid, itemId: hit.id, name: hit.data().name, kind: "restock", delta: i.quantity, unit: i.unit, createdAt: ts(ctx.now()),
+      });
+      results.push({ name: String(hit.data().name), quantity: i.quantity, unit: i.unit, action: "added_to_existing", nowQuantity: next });
+    } else {
+      await createDoc(ctx, hid, "pantryItems", actor, {
+        name: i.name, nameKey: normalizeName(i.name), quantity: i.quantity, unit: i.unit, minQuantity: i.minQuantity ?? null,
+        lowStock: i.minQuantity !== undefined && i.quantity <= i.minQuantity, location: i.location ?? "Pantry shelf", expiresAt: null,
+      });
+      results.push({ name: i.name, quantity: i.quantity, unit: i.unit, action: "created", nowQuantity: i.quantity });
+    }
+  }
+  await audit(ctx, hid, actor, "pantry.bulk_added", { type: "pantry" }, { items: results.length });
+  return { created: results.filter((r) => r.action === "created").length, updated: results.filter((r) => r.action === "added_to_existing").length, items: results };
+}

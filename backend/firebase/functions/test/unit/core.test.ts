@@ -122,6 +122,18 @@ describe("router (no LLM)", () => {
     expect(route("Are we over budget on groceries?")).toMatchObject({ skill: "finance-manager", workflow: "budget_protection" });
     expect(route("add milk")).toMatchObject({ skill: "household-manager", tier: "simple" });
   });
+  it("sends vendor and delivery talk to the finance skill, and keeps everyday shopping and cooking where they were", () => {
+    for (const m of [
+      "Add a milk vendor bill, 1 liter a day at 60 rupees a liter",
+      "The milk vendor didn't come yesterday", "milk didn't come on the 3rd and 4th", "newspaper was not delivered today",
+      "maid is on leave from 10th to 15th", "tiffin skipped on Friday", "Ramesh the milkman raised his price to 65 per liter",
+      "we got 2 liters extra milk today", "water can delivery didn't come",
+    ]) expect(route(m), m).toMatchObject({ skill: "finance-manager" });
+    expect(route("add more milk to the list")).toMatchObject({ skill: "smart-shopping" });
+    expect(route("Plan dinners for this week")).toMatchObject({ skill: "meal-planner" });
+    expect(route("What's running low in the pantry?")).toMatchObject({ skill: "smart-shopping" });
+    expect(route("Add 2 kg rice and 1 l oil to the pantry")).toMatchObject({ skill: "smart-shopping" });
+  });
 });
 
 describe("scheduling helpers", () => {

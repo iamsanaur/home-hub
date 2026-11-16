@@ -11,6 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import kotlinx.coroutines.tasks.await
+import com.e404.homehub.ui.components.HomeHubIconButton
+import com.e404.homehub.ui.components.ConfirmationDialog
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
@@ -88,6 +93,7 @@ fun ShoppingScreen() {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
     var newList by remember { mutableStateOf(false) }
+    var deletingList by remember { mutableStateOf(false) }
     val all = (lists as? Loadable.Ready)?.value.orEmpty()
     val active = all.firstOrNull { it.id == selected } ?: all.firstOrNull()
     LaunchedEffect(active?.id) { active?.let { graph.offline.attachList(h.hid, it.id) } }
@@ -95,7 +101,10 @@ fun ShoppingScreen() {
     val canCreateList = h.role.isAdultPlus || h.role.id == "staff"
 
     ListScreen("Shopping", subtitle = active?.name, fabIcon = if (active != null) Icons.Outlined.Add else null, fabLabel = "Add item", onFab = { adding = true },
-        actions = { if (canCreateList) HomeHubButton("New list", { newList = true }, kind = ButtonKind.Tertiary) }) {
+        actions = {
+            if (h.role.isAdultPlus && active != null) HomeHubIconButton(Icons.Outlined.DeleteOutline, "Delete this list", { deletingList = true }, tint = HomeHubTheme.colors.inkSecondary)
+            if (canCreateList) HomeHubButton("New list", { newList = true }, kind = ButtonKind.Tertiary)
+        }) {
         when (lists) {
             Loadable.Loading -> item { LoadingSkeleton() }
             is Loadable.Failed -> item { ErrorState((lists as Loadable.Failed).message) }
@@ -135,6 +144,17 @@ fun ShoppingScreen() {
         }
     }
     if (adding && active != null) AddGroceryItem(active.id) { adding = false }
+    if (deletingList && active != null) ConfirmationDialog("Delete “${active.name}”?", "The list and every item on it are removed for everyone. This can't be undone.", "Delete", destructive = true,
+        onConfirm = {
+            deletingList = false
+            scope.launch {
+                runCatching {
+                    val ids = graph.firestore.collection("households/${h.hid}/groceryItems").whereEqualTo("listId", active.id).get().await().documents.map { it.reference }
+                    ids.chunked(400).forEach { chunk -> graph.firestore.batch().also { b -> chunk.forEach { b.delete(it) } }.commit().await() }
+                    graph.data.delete(h.hid, "shoppingLists", active.id)
+                }.onSuccess { selected = null; nav.toast("List deleted") }.onFailure { nav.toast(it.message ?: "Couldn't delete") }
+            }
+        }, onDismiss = { deletingList = false })
     if (newList) {
         var name by rememberSaveable { mutableStateOf("") }
         var busy by remember { mutableStateOf(false) }
@@ -193,9 +213,12 @@ fun PantryScreen() {
     val pantry by remember(h.hid) { graph.data.observe(h.hid, "pantryItems", { it.orderBy("name") }, PantryItem::from) }.collectAsStateWithLifecycle(Loadable.Loading)
     var editing by remember { mutableStateOf<PantryItem?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var bulk by remember { mutableStateOf(false) }
+    var deletingItem by remember { mutableStateOf<PantryItem?>(null) }
     val canWrite = h.role.isAdultPlus || h.role.id == "staff"
     val soon = Instant.now().plusSeconds(3 * 86400)
-    ListScreen("Pantry", fabIcon = if (canWrite) Icons.Outlined.Add else null, fabLabel = "Add pantry item", onFab = { adding = true }) {
+    ListScreen("Pantry", fabIcon = if (canWrite) Icons.Outlined.Add else null, fabLabel = "Add pantry item", onFab = { adding = true },
+        actions = { if (canWrite) HomeHubIconButton(Icons.Outlined.PlaylistAdd, "Add several items", { bulk = true }, tint = HomeHubTheme.colors.brand) }) {
         when (val p = pantry) {
             Loadable.Loading -> item { LoadingSkeleton() }
             is Loadable.Failed -> item { ErrorState(p.message) }
@@ -261,7 +284,14 @@ fun PantryScreen() {
                 }
             }
             Text("Every change is recorded in the stock history, including waste.", style = HomeHubTheme.type.caption, color = HomeHubTheme.colors.inkSecondary)
+            if (h.role.isAdultPlus) HomeHubButton("Delete item", { deletingItem = item; editing = null }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive)
         }
+    }
+    if (bulk) BulkPantrySheet((pantry as? Loadable.Ready)?.value.orEmpty()) { bulk = false }
+    deletingItem?.let { item ->
+        ConfirmationDialog("Delete ${item.name}?", "It's removed from the pantry for everyone. Its stock history is kept.", "Delete", destructive = true,
+            onConfirm = { deletingItem = null; scope.launch { runCatching { graph.data.delete(h.hid, "pantryItems", item.id) }.onSuccess { nav.toast("${item.name} deleted") }.onFailure { nav.toast(it.message ?: "Couldn't delete") } } },
+            onDismiss = { deletingItem = null })
     }
     if (adding) {
         var name by rememberSaveable { mutableStateOf("") }

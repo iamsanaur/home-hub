@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import com.e404.homehub.ui.components.ConfirmationDialog
+import androidx.compose.foundation.clickable
 import com.e404.homehub.ui.components.HomeHubListTile
 import com.e404.homehub.ui.Routes
 import androidx.compose.material.icons.outlined.Inbox
@@ -90,6 +92,7 @@ fun FinanceScreen() {
     val t = HomeHubTheme.type
     var month by rememberSaveable { mutableStateOf(YearMonth.now(h.zone).toString()) }
     var adding by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<Txn?>(null) }
     if (!h.canFinance) { ListScreen("Finance") { item { RestrictedNotice() } }; return }
     val ym = YearMonth.parse(month)
     val start = ym.atDay(1).atStartOfDay(h.zone).toInstant()
@@ -155,7 +158,7 @@ fun FinanceScreen() {
                     GroupedList {
                         tx.value.forEachIndexed { i, x ->
                             if (i > 0) Divider()
-                            Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).padding(horizontal = Space.md, vertical = Space.sm), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Open transaction") { viewing = x }.defaultMinSize(minHeight = 56.dp).padding(horizontal = Space.md, vertical = Space.sm), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(x.description ?: x.category, style = t.cardTitle, color = c.ink)
                                     Text("${x.category} · ${PAYMENT_METHODS.firstOrNull { it.first == x.paymentMethod }?.second ?: x.paymentMethod}" + (x.occurredAt?.let { " · ${Dates.shortDate(it, h.zone)}" } ?: ""), style = t.caption, color = c.inkSecondary)
@@ -170,6 +173,38 @@ fun FinanceScreen() {
         }
     }
     if (adding) AddTransactionSheet { adding = false }
+    viewing?.let { x -> TransactionSheet(x) { viewing = null } }
+}
+
+/** One transaction. Owners and administrators can delete it unless it's locked (reconciled). */
+@Composable
+private fun TransactionSheet(x: Txn, onDismiss: () -> Unit) {
+    val h = LocalHousehold.current
+    val graph = AppGraph.get(LocalContext.current)
+    val nav = LocalActions.current
+    val scope = rememberCoroutineScope()
+    val c = HomeHubTheme.colors
+    val t = HomeHubTheme.type
+    var confirm by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    FormSheet(x.description ?: x.category, onDismiss) {
+        Text((if (x.type == "income") "+" else "−") + Money.format(x.amountMinor, x.currency), style = t.sectionTitle, color = if (x.type == "income") c.success else c.ink)
+        Text("${x.category} · ${PAYMENT_METHODS.firstOrNull { it.first == x.paymentMethod }?.second ?: x.paymentMethod}" + (x.occurredAt?.let { " · ${Dates.shortDate(it, h.zone)}" } ?: ""), style = t.bodyCompact, color = c.inkSecondary)
+        when {
+            x.locked -> Text("This record is locked (reconciled), so it can't be deleted.", style = t.bodyCompact, color = c.inkSecondary)
+            h.role.isManager -> HomeHubButton("Delete transaction", { confirm = true }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, loading = busy)
+            else -> Text("Only owners and administrators can delete transactions.", style = t.bodyCompact, color = c.inkSecondary)
+        }
+    }
+    if (confirm) ConfirmationDialog("Delete this transaction?", "It's removed from Finance and from the month's totals for everyone. This can't be undone.", "Delete", destructive = true,
+        onConfirm = {
+            confirm = false; busy = true
+            scope.launch {
+                runCatching { graph.data.delete(h.hid, "transactions", x.id) }
+                    .onSuccess { nav.toast("Transaction deleted"); onDismiss() }.onFailure { nav.toast(it.message ?: "Couldn't delete") }
+                busy = false
+            }
+        }, onDismiss = { confirm = false })
 }
 
 @Composable
@@ -270,6 +305,7 @@ private fun BillDetailSheet(bill: Bill, onDismiss: () -> Unit) {
     var method by rememberSaveable { mutableStateOf("upi") }
     var confirming by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
     val minor = Money.parse(amount, bill.currency)?.takeIf { it > 0 }
     FormSheet(bill.name, onDismiss) {
         Text("${Money.format(bill.amountMinor, bill.currency)} · " + (bill.nextDueAt?.let { "due ${Dates.relative(it, h.zone)}" } ?: "no due date") + (bill.recurrence?.let { " · repeats $it" } ?: ""), style = t.body, color = c.ink)
@@ -300,7 +336,13 @@ private fun BillDetailSheet(bill: Bill, onDismiss: () -> Unit) {
                 } }
             else -> LoadingSkeleton(2)
         }
+        if (h.role.isManager) HomeHubButton("Delete bill", { deleting = true }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive)
     }
+    if (deleting) ConfirmationDialog("Delete ${bill.name}?", "It stops being tracked and disappears from Bills for everyone. Payments already recorded stay in your financial history.", "Delete", destructive = true,
+        onConfirm = {
+            deleting = false
+            scope.launch { runCatching { graph.data.delete(h.hid, "bills", bill.id) }.onSuccess { nav.toast("Bill deleted"); onDismiss() }.onFailure { nav.toast(it.message ?: "Couldn't delete") } }
+        }, onDismiss = { deleting = false })
 }
 
 @Composable
