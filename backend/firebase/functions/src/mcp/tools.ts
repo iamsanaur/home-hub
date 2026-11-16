@@ -154,11 +154,17 @@ export const TOOLS: ToolDef[] = [
       weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).default([1, 2, 3, 4, 5, 6, 7]).describe("ISO weekdays delivered: 1=Mon … 7=Sun"),
       due_day: z.number().int().min(1).max(28).default(5).describe("day of the following month the bill is due"),
       category: z.string().max(60).default("Groceries"), start_month: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("first month to track, YYYY-MM (default: this month)"),
+      confirm_large: z.boolean().default(false).describe("Set true ONLY after the person confirmed the per-unit rate really gives a large monthly total"),
       idempotency_key: idem,
     }, risk: "reversible_write",
     run: async (ctx, hid, a, x) => {
       const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR";
       const rateMinor = parseDecimal(String(x.rate_per_unit), cur).amountMinor;
+      // Sanity check: a monthly amount mistaken for a per-unit rate gets multiplied by ~30. Catch that before it is stored.
+      const monthlyMinor = Math.round(rateMinor * x.default_quantity * x.weekdays.length * 52 / 12);
+      if (monthlyMinor > 2_500_000 && !x.confirm_large) {
+        throw new AppError(400, "needs_confirmation", `At ${x.rate_per_unit} per ${x.unit} this bill would come to about ${Math.round(monthlyMinor / 100).toLocaleString("en-IN")} a month. If ${x.rate_per_unit} is the total for the month (rent, a salary), call create_bill instead. If it really is per ${x.unit}, ask the person to confirm, then call again with confirm_large=true.`);
+      }
       return createVendorBill(ctx, hid, a, { name: x.name, vendor: x.vendor, unit: x.unit, rateMinor, defaultQuantity: x.default_quantity, weekdays: x.weekdays, dueDay: x.due_day, category: x.category, startMonth: x.start_month, idempotencyKey: x.idempotency_key });
     } }),
   tool({ name: "update_vendor_bill",

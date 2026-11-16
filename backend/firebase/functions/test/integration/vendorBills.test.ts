@@ -144,6 +144,14 @@ describe("the assistant can run vendor bills, bulk pantry and propose deletions"
     expect(JSON.stringify(await run("record_deliveries", {}))).toMatch(/Nothing to record/);
   });
 
+  it("a monthly amount mistaken for a per-unit rate is stopped, then allowed once confirmed", async () => {
+    const stopped = await run("create_vendor_bill", { name: "Househelp", unit: "days", rate_per_unit: 2000 });
+    expect(JSON.stringify(stopped)).toMatch(/needs_confirmation|create_bill instead/);
+    expect((await ctx.db.collection(`households/${hid}/bills`).get()).size).toBe(0);
+    const ok = await run("create_vendor_bill", { name: "Househelp", unit: "days", rate_per_unit: 2000, confirm_large: true });
+    expect(ok).toMatchObject({ cycleMonth: expect.any(String) });
+  });
+
   it("create_bill stores a fixed monthly amount exactly as given (not multiplied by days)", async () => {
     const rent = await run("create_bill", { name: "Rent", amount: 13000, due_date: "2026-12-02" }) as { id: string; amountMinor: number };
     const help = await run("create_bill", { name: "Househelp", amount: 2000, due_date: "2026-12-01" }) as { id: string; amountMinor: number };
