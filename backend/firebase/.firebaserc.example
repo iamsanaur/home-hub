@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "demo-homehub",
+    "prod": "your-firebase-project-id"
+  }
+}

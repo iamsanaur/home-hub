@@ -30,7 +30,7 @@ scripts/hermes-docker.sh logs | down
 - **Availability**: production reaches Hermes only while this machine and Docker are running. When they aren't, the
   apps keep working (Hermes Mobile on the phone is the primary runtime) and the server fallback reports unreachable.
 - Models: `HERMES_MODEL_SIMPLE` / `HERMES_MODEL_COMPLEX` (OpenRouter, Gemini 2.5 Flash-Lite / Flash) in
-  `backend/firebase/functions/.env.your-firebase-project-id`.
+  `backend/firebase/functions/.env.<your-project-id>`.
 
 ### Host install (development)
 Verified against **Hermes Agent v0.21.2, commit `5eb99eb2`** (pin this; HomeHub uses only the documented API server:

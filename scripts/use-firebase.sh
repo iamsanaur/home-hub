@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Switch both native apps between the local Emulator Suite and the real Firebase project.
-#   scripts/use-firebase.sh prod       copy config/firebase/* into the apps (real project your-firebase-project-id)
+#   scripts/use-firebase.sh prod       copy config/firebase/* into the apps (your real Firebase project)
 #   scripts/use-firebase.sh emulator   remove them again (apps fall back to demo-homehub on the emulators)
 # The config files are gitignored. Rebuild the apps after switching.
 set -euo pipefail

@@ -10,13 +10,18 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export HOMEHUB_HERMES_HOME="${HOMEHUB_HERMES_HOME:-$HOME/.hermes-homehub}"
 export HERMES_UID="$(id -u)" HERMES_GID="$(id -g)"
 COMPOSE=(docker compose -f "$ROOT/agents/hermes/docker/docker-compose.yml")
-FUNCS_ENV="$ROOT/backend/firebase/functions/.env.your-firebase-project-id"
-MCP_URL="https://asia-south1-your-firebase-project-id.cloudfunctions.net/mcp"
+# The Firebase project id and the public Hermes address are private to each deployment: they come from the gitignored
+# backend/firebase/.firebaserc ("prod" alias) and from $HOMEHUB_PUBLIC_URL or "$HOMEHUB_HERMES_HOME/public-url".
+PROJECT_ID="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["projects"]["prod"])' "$ROOT/backend/firebase/.firebaserc" 2>/dev/null || true)"
+[[ -n "$PROJECT_ID" ]] || { echo "Add a \"prod\" project alias to backend/firebase/.firebaserc (see backend/firebase/.firebaserc.example)"; exit 1; }
+FUNCS_ENV="$ROOT/backend/firebase/functions/.env.$PROJECT_ID"
+MCP_URL="https://asia-south1-$PROJECT_ID.cloudfunctions.net/mcp"
 IMAGE="homehub-hermes:v0.21.2-5eb99eb2"
 source "$ROOT/scripts/dev-env.sh" >/dev/null
 
 secret() { (cd "$ROOT/backend/firebase" && firebase functions:secrets:access "$1" --project prod 2>/dev/null) || true; }
-PUBLIC_URL="${HOMEHUB_PUBLIC_URL:-https://hermes.example.com}"
+PUBLIC_URL="${HOMEHUB_PUBLIC_URL:-$(cat "$HOMEHUB_HERMES_HOME/public-url" 2>/dev/null || true)}"
+[[ -n "$PUBLIC_URL" || "${1:-}" == "logs" || "${1:-}" == "down" ]] || { echo "Set HOMEHUB_PUBLIC_URL (https://your-hermes-host) or write it to $HOMEHUB_HERMES_HOME/public-url"; exit 1; }
 set_env() { # set_env KEY VALUE in the Functions env file
   if grep -q "^$1=" "$FUNCS_ENV"; then sed -i '' "s#^$1=.*#$1=$2#" "$FUNCS_ENV"; else printf '%s=%s\n' "$1" "$2" >> "$FUNCS_ENV"; fi
 }

@@ -5,7 +5,7 @@
 #   hermes  Hermes Agent v0.21.2 (commit 5eb99eb2), built from the pinned upstream checkout.
 #           All state lives in HOMEHUB_HERMES_HOME (default ~/.hermes-homehub), never ~/.hermes.
 #           The API server requires API_SERVER_KEY; the profile disables terminal/file/web/browser tools.
-#   tunnel  HomeHub's named Cloudflare tunnel (hermes.example.com) so HomeHub's Cloud Functions (Google)
+#   tunnel  HomeHub's named Cloudflare tunnel (your own hostname) so HomeHub's Cloud Functions (Google)
 #           can reach the API server without opening a port on this machine. The address is permanent.
 name: homehub-hermes
 
@@ -30,7 +30,7 @@ services:
     restart: unless-stopped
     depends_on: [hermes]
     # HomeHub's own named tunnel (credentials + config live in the data folder, never in git).
-    # Public address: https://hermes.example.com — it never changes, so production keeps working across restarts.
+    # Public address: the hostname you route to the tunnel — it never changes, so production keeps working across restarts.
     volumes:
       - ${HOMEHUB_HERMES_HOME:?set by scripts/hermes-docker.sh}/cloudflared:/etc/cloudflared:ro
     command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]

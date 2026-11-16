@@ -22,10 +22,10 @@ Legend: **Done** = implemented and exercised by tests or on an emulator/simulato
 
 Screenshots: `tests/evidence/android/`, `tests/evidence/ios/` (Connections: `tests/evidence/ios/connections/`).
 
-## Production (`your-firebase-project-id`, deployed 16 Nov 2026)
-- Firebase project **HomeHub AI** (`your-firebase-project-id`, Blaze), Android + iOS apps registered (`com.e404.homehub`); configs in gitignored `config/firebase/` — switch the apps with `scripts/use-firebase.sh prod|emulator`.
-- Deployed with `scripts/deploy-prod.sh`: Firestore (`asia-south1`) rules + indexes incl. TTL, Storage bucket `your-firebase-project-id.firebasestorage.app` + rules, functions `api`, `mcp`, `hooks`, `alexa`, `scheduler`, `onTaskCompleted`, `onPantryWritten` (all `asia-south1`). Email/password sign-in on.
-- Platform model account: OpenRouter key in Secret Manager (`MODEL_API_KEY`), models `google/gemini-2.5-flash-lite` (quick) / `google/gemini-2.5-flash` (planning), set in `backend/firebase/functions/.env.your-firebase-project-id`.
+## Production (private project id, deployed 16 Nov 2026)
+- Firebase project **HomeHub AI** (Blaze), Android + iOS apps registered (`com.e404.homehub`); configs in gitignored `config/firebase/` — switch the apps with `scripts/use-firebase.sh prod|emulator`.
+- Deployed with `scripts/deploy-prod.sh`: Firestore (`asia-south1`) rules + indexes incl. TTL, the default Storage bucket + rules, functions `api`, `mcp`, `hooks`, `alexa`, `scheduler`, `onTaskCompleted`, `onPantryWritten` (all `asia-south1`). Email/password sign-in on.
+- Platform model account: OpenRouter key in Secret Manager (`MODEL_API_KEY`), models `google/gemini-2.5-flash-lite` (quick) / `google/gemini-2.5-flash` (planning), set in `<private project id>`.
 - **Production smoke test passed** (throwaway account, deleted afterwards): health, household creation, catalog, gateway status, model accounts, on-device agent run → **live LLM call through the model proxy to OpenRouter** → completion with measured usage (15 tokens), account deletion. Anonymous Firestore reads are denied.
 - **Both apps run against production** (Android emulator API 35, iPhone 17 Pro simulator; QA account in gitignored `config/firebase/qa-account.txt`). iOS `ProductionSmokeTests` passes: sign-in, notification permission, **full on-device agent run against the live model (6 tool calls via MCP, "Completed · verified")**, Connections. Evidence: `tests/evidence/ios/prod/`, `tests/evidence/android/prod/`.
 - **Push:** Android verified end to end (server → FCM → tray, HomeHub channel/icon). iOS registers an FCM token; delivery needs the APNs key uploaded to Firebase and a physical iPhone. Both apps now ask for notification permission from a Home card (they never asked before); iOS registers for remote notifications and has the `aps-environment` entitlement.
@@ -50,7 +50,7 @@ Screenshots: `tests/evidence/android/`, `tests/evidence/ios/` (Connections: `tes
 - **Assistant tool entries**: tool calls collapse to one line ("Used 5 tools" / the tool running now); expand to see each tool once with a count, remove entries or clear all (display only — nothing is undone).
 - **Recent activity (Home)**: owners and administrators can delete single entries or clear the feed (`DELETE /v1/households/:hid/activity[/:logId]`); runs in progress are kept; the security audit trail is permanent and records each deletion. iOS Home gained the Recent activity section.
 - **Assistant reliability**: provider 429/5xx retried with backoff and a cross-provider fallback model (phone proxy `MODEL_FALLBACK`; server Hermes `fallback_providers`).
-- **Hermes hosting**: HomeHub's own Cloudflare named tunnel `homehub` → `https://hermes.example.com` (permanent), runs in Docker with `restart: unless-stopped`; the Mac and Docker must be running. `scripts/hermes-docker.sh up|status|down`.
+- **Hermes hosting**: HomeHub's own Cloudflare named tunnel `homehub` → a permanent hostname on the owner's domain, runs in Docker with `restart: unless-stopped`; the Mac and Docker must be running. `scripts/hermes-docker.sh up|status|down`.
 - Android release APK built and signed (`dist/android/`, keystore in `config/release/` — back it up).
 
 ## Done
