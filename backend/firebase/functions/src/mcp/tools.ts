@@ -24,6 +24,16 @@ import {
 } from "../services/home";
 import { getHouseholdReport, ReportKind } from "../services/reports";
 import { getAgentUsageReport } from "../services/usage";
+import {
+  adjustPantryByName, cancelEvent, createCleaningRoutine, createNote, createRecipe, EventPatch, findShoppingItem, FixedBillPatch, getShoppingList,
+  listCleaning, listNotes, listRecipes, listShoppingLists, markCleaned, RecipeInput, removeShoppingItem, setBudget, updateEvent, updateFixedBill, updateShoppingItem,
+} from "../services/assistantTools";
+import { executeDeviceAction, listDevices, DeviceAction } from "../devices/devices";
+import { AutomationInput, saveAutomation } from "../automations/automations";
+import { executePluginTool, listIntegrations } from "../plugins/runtime";
+import { PLUGIN_INDEX } from "../plugins/catalog";
+import { listMemories, remember, deleteMemory } from "../services/memory";
+import { getMembership, requireMember, ts } from "../services/base";
 
 /**
  * HomeHub MCP tools. Design rules:
@@ -100,9 +110,22 @@ export const TOOLS: ToolDef[] = [
   tool({ name: "add_shopping_item", description: "Add an item to a list; merges with an identical unpurchased line.",
     shape: { ...ShoppingItemInput.shape, idempotency_key: idem }, risk: "reversible_write",
     run: (ctx, hid, a, x) => { const { idempotency_key, ...i } = x; return addShoppingItem(ctx, hid, a, ShoppingItemInput.parse(i)); } }),
-  tool({ name: "mark_item_purchased", description: "Record that a person bought an item (restocks pantry). Does not buy anything.",
-    shape: { item_id: z.string().max(128), actual_price_minor: z.number().int().min(0).optional() }, risk: "bounded_write",
-    run: (ctx, hid, a, x) => markItemPurchased(ctx, hid, a, x.item_id, x.actual_price_minor) }),
+  tool({ name: "mark_item_purchased", description: "Record that a person bought an item (restocks pantry). Does not buy anything. Pass the item's name (and the list if several) or its id; use get_shopping_list to see items.",
+    shape: { item: z.string().max(120).optional().describe("Item name, e.g. 'milk'"), list: z.string().max(120).optional().describe("List name when the item could be on several"), item_id: z.string().max(128).optional(), actual_price_minor: z.number().int().min(0).optional() }, risk: "bounded_write",
+    run: async (ctx, hid, a, x) => markItemPurchased(ctx, hid, a, await findShoppingItem(ctx, hid, a, { itemId: x.item_id, item: x.item, list: x.list }), x.actual_price_minor) }),
+  tool({ name: "list_shopping_lists", description: "The household's shopping lists with item counts.", shape: {}, risk: "read", run: (ctx, hid, a) => listShoppingLists(ctx, hid, a) }),
+  tool({ name: "get_shopping_list", description: "Items on a shopping list (what is still to buy by default). Omit list when there is only one.",
+    shape: { list: z.string().max(120).optional().describe("List name or id"), include_purchased: z.boolean().default(false) }, risk: "read",
+    run: (ctx, hid, a, x) => getShoppingList(ctx, hid, a, { list: x.list, includePurchased: x.include_purchased }) }),
+  tool({ name: "update_shopping_item", description: "Change an item's quantity, unit, price estimate, brand or category.",
+    shape: { item: z.string().max(120).optional(), list: z.string().max(120).optional(), item_id: z.string().max(128).optional(), quantity: z.number().positive().max(100000).optional(), unit: z.string().max(20).optional(), estimated_price_minor: z.number().int().min(0).nullable().optional(), preferred_brand: z.string().max(80).nullable().optional(), category: z.string().max(60).optional() }, risk: "reversible_write",
+    run: async (ctx, hid, a, x) => updateShoppingItem(ctx, hid, a, await findShoppingItem(ctx, hid, a, { itemId: x.item_id, item: x.item, list: x.list }), { quantity: x.quantity, unit: x.unit, estimatedPriceMinor: x.estimated_price_minor, preferredBrand: x.preferred_brand, category: x.category }) }),
+  tool({ name: "remove_shopping_item", description: "Take an item off a shopping list (it was added by mistake or is no longer needed).",
+    shape: { item: z.string().max(120).optional(), list: z.string().max(120).optional(), item_id: z.string().max(128).optional() }, risk: "reversible_write",
+    run: async (ctx, hid, a, x) => removeShoppingItem(ctx, hid, a, await findShoppingItem(ctx, hid, a, { itemId: x.item_id, item: x.item, list: x.list })) }),
+  tool({ name: "adjust_pantry", description: "Record pantry use: kind consume (used), waste (thrown away) or restock (added), with the quantity in the item's own unit. Finds the item by name.",
+    shape: { item: z.string().min(1).max(120), kind: z.enum(["consume", "waste", "restock"]), quantity: z.number().positive().max(100000), note: z.string().max(200).optional(), idempotency_key: idem }, risk: "reversible_write",
+    run: (ctx, hid, a, x) => adjustPantryByName(ctx, hid, a, { item: x.item, kind: x.kind, quantity: x.quantity, note: x.note }) }),
 
   // ---- meals ----
   tool({ name: "get_meal_plan", description: "Meal plan for the week containing `date` (default: this week).",
@@ -266,6 +289,94 @@ export const TOOLS: ToolDef[] = [
     run: (ctx, hid, a) => listPendingApprovals(ctx, hid, a) }),
   tool({ name: "get_approval_status", description: "Status and execution result of one approval.",
     shape: { approval_id: z.string().max(128) }, risk: "read", run: (ctx, hid, a, x) => getApproval(ctx, hid, a, x.approval_id) }),
+
+  // ---- more of what the apps can do ----
+  tool({ name: "record_income", description: "Record income the household already received (salary, rent received, refund). Bookkeeping only. Amount in minor units.",
+    shape: { amountMinor: ExpenseInput.shape.amountMinor, currency: ExpenseInput.shape.currency, category: z.string().min(1).max(60).default("Income"), description: z.string().max(200).optional(), paymentMethod: ExpenseInput.shape.paymentMethod.default("bank_transfer"), occurredAt: IsoDateTime, idempotency_key: idem },
+    risk: "bounded_write", run: (ctx, hid, a, x) => { const { idempotency_key, ...e } = x; return recordExpense(ctx, hid, a, { ...ExpenseInput.parse(e), type: "income" }, idempotency_key); } }),
+  tool({ name: "set_budget", description: "Set (or change) a monthly budget limit. category '*' is the overall monthly budget. limit is in MAJOR units (₹40,000 → 40000).",
+    shape: { period: z.string().regex(/^\d{4}-\d{2}$/).describe("YYYY-MM"), category: z.string().min(1).max(60).default("*"), limit: z.number().positive().max(100_000_000), idempotency_key: idem }, risk: "bounded_write",
+    run: async (ctx, hid, a, x) => { const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR"; return setBudget(ctx, hid, a, { period: x.period, category: x.category, limitMinor: parseDecimal(String(x.limit), cur).amountMinor }); } }),
+  tool({ name: "update_bill", description: "Change a FIXED bill: its name, amount (major units), next due date, repeat, or switch it off (active:false). For pay-per-delivery bills use update_vendor_bill.",
+    shape: { bill: z.string().max(128).describe("Bill name or id"), name: z.string().max(120).optional(), amount: z.number().positive().max(100_000_000).optional(), due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), repeat: z.enum(["monthly", "yearly", "none"]).optional(), active: z.boolean().optional() }, risk: "bounded_write",
+    run: async (ctx, hid, a, x) => {
+      const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR";
+      const bills = (await listBills(ctx, hid, a)) as unknown as Array<{ id: string; name: string }>;
+      const b = bills.find((y) => y.id === x.bill) ?? bills.filter((y) => y.name.toLowerCase().includes(x.bill.toLowerCase()));
+      const hit = Array.isArray(b) ? (b.length === 1 ? b[0] : null) : b;
+      if (!hit) throw new AppError(400, "invalid_argument", `Say which bill. Yours: ${bills.map((y) => y.name).join(", ")}`);
+      return updateFixedBill(ctx, hid, a, hit.id, FixedBillPatch.parse({ name: x.name, amountMinor: x.amount === undefined ? undefined : parseDecimal(String(x.amount), cur).amountMinor, dueDate: x.due_date, repeat: x.repeat, active: x.active }));
+    } }),
+  tool({ name: "update_event", description: "Change a calendar event (title, start/end, place, type). Returns any new conflicts.",
+    shape: { event_id: z.string().max(128), ...EventPatch.shape }, risk: "reversible_write",
+    run: (ctx, hid, a, x) => { const { event_id, ...p } = x; return updateEvent(ctx, hid, a, event_id, p); } }),
+  tool({ name: "cancel_event", description: "Cancel (remove) a calendar event.", shape: { event_id: z.string().max(128) }, risk: "bounded_write",
+    run: (ctx, hid, a, x) => cancelEvent(ctx, hid, a, x.event_id) }),
+  tool({ name: "list_recipes", description: "Saved recipes with ingredients.", shape: { limit: z.number().int().min(1).max(100).default(30) }, risk: "read", run: (ctx, hid, a, x) => listRecipes(ctx, hid, a, x.limit) }),
+  tool({ name: "create_recipe", description: "Save a recipe (name, servings, ingredients with quantity and unit). Meal plans and shopping lists can then use it.",
+    shape: { ...RecipeInput.shape, idempotency_key: idem }, risk: "reversible_write", run: (ctx, hid, a, x) => { const { idempotency_key, ...r } = x; return createRecipe(ctx, hid, a, RecipeInput.parse(r)); } }),
+  tool({ name: "list_cleaning", description: "Cleaning routines: room, how often, who, next due, last done.", shape: {}, risk: "read", run: (ctx, hid, a) => listCleaning(ctx, hid, a) }),
+  tool({ name: "create_cleaning_routine", description: "Add a room-wise cleaning routine (daily, weekly, monthly or seasonal), optionally assigned and as a deep clean.",
+    shape: { title: z.string().min(1).max(120), room: z.string().max(80).optional(), frequency: z.enum(["daily", "weekly", "monthly", "seasonal"]), assignee_uid: z.string().max(128).optional(), next_due_at: IsoDateTime.optional(), deep_clean: z.boolean().default(false), idempotency_key: idem }, risk: "reversible_write",
+    run: (ctx, hid, a, x) => createCleaningRoutine(ctx, hid, a, { title: x.title, roomName: x.room, frequency: x.frequency, assigneeUid: x.assignee_uid, nextDueAt: x.next_due_at, deepClean: x.deep_clean }) }),
+  tool({ name: "mark_cleaned", description: "Record that a cleaning routine was done now; schedules the next one.", shape: { routine: z.string().min(1).max(120).describe("Routine name or id") }, risk: "reversible_write", run: (ctx, hid, a, x) => markCleaned(ctx, hid, a, x.routine) }),
+  tool({ name: "list_notes", description: "Shared household notes and your own private notes (title and a short excerpt).", shape: { limit: z.number().int().min(1).max(50).default(20) }, risk: "read", run: (ctx, hid, a, x) => listNotes(ctx, hid, a, x.limit) }),
+  tool({ name: "create_note", description: "Save a note. visibility 'private' (only the person) or 'household'.",
+    shape: { title: z.string().min(1).max(120), body: z.string().max(20000), visibility: z.enum(["private", "household"]).default("private"), idempotency_key: idem }, risk: "reversible_write", run: (ctx, hid, a, x) => createNote(ctx, hid, a, { title: x.title, body: x.body, visibility: x.visibility }) }),
+
+  // ---- memory ----
+  tool({ name: "list_memories", description: "What HomeHub remembers (household preferences and the person's private ones), with ids.", shape: {}, risk: "read", run: (ctx, hid, a) => listMemories(ctx, hid, a) }),
+  tool({ name: "remember_preference", description: "Save a lasting preference or fact the person told you (e.g. 'we are vegetarian', 'no onions on Tuesdays'). Not for passing remarks, passwords or sensitive data.",
+    shape: { text: z.string().min(3).max(300), scope: z.enum(["household", "private"]).default("household"), kind: z.enum(["preference", "fact"]).default("preference"), idempotency_key: idem }, risk: "reversible_write",
+    run: (ctx, hid, a, x) => remember(ctx, hid, a, { scope: x.scope, kind: x.kind, text: x.text }) }),
+  tool({ name: "forget_memory", description: "Delete one remembered item by id (see list_memories).", shape: { memory_id: z.string().max(128) }, risk: "bounded_write", run: async (ctx, hid, a, x) => { await deleteMemory(ctx, hid, a, x.memory_id); return { forgotten: x.memory_id }; } }),
+
+  // ---- devices, automations and connected services ----
+  tool({ name: "list_devices", description: "Smart-home devices with room, current state and what they can do.", shape: {}, risk: "read",
+    run: async (ctx, hid, a) => { const r = await listDevices(ctx, hid, a); return { rooms: r.rooms, devices: r.devices.map((d: Record<string, unknown>) => ({ id: d.id, name: d.name, type: d.type, room: d.roomName ?? d.roomId ?? null, state: d.state, reachable: d.reachable, capabilities: d.capabilities, safety: d.safety })) }; } }),
+  tool({ name: "control_device", description: "Switch or adjust a device and check it really changed. Locks, doors and heaters always need a person's approval; the result says so. action: power_on, power_off, lock, unlock, set_brightness (value 0-100), set_temperature (value in °C).",
+    shape: { device: z.string().min(1).max(120).describe("Device name or id"), action: z.enum(["power_on", "power_off", "lock", "unlock", "set_brightness", "set_temperature"]), value: z.number().min(0).max(100).optional(), idempotency_key: idem }, risk: "reversible_write",
+    run: async (ctx, hid, a, x) => {
+      const all = (await listDevices(ctx, hid, a)).devices as Array<{ id: string; name: string }>;
+      const key = x.device.toLowerCase();
+      const hits = all.filter((d) => d.id === x.device || d.name.toLowerCase() === key);
+      const some = hits.length ? hits : all.filter((d) => d.name.toLowerCase().includes(key));
+      if (some.length !== 1) throw new AppError(400, "invalid_argument", some.length ? `More than one device matches: ${some.map((d) => d.name).join(", ")}` : `No device called "${x.device}". Devices: ${all.slice(0, 12).map((d) => d.name).join(", ")}`);
+      const act: DeviceAction = x.action === "power_on" ? { type: "power", value: "ON" } : x.action === "power_off" ? { type: "power", value: "OFF" } : x.action === "lock" ? { type: "lock" } : x.action === "unlock" ? { type: "unlock" }
+        : x.action === "set_brightness" ? { type: "brightness", value: Math.round(x.value ?? NaN) } : { type: "thermostat", targetTemperature: x.value };
+      if ((x.action === "set_brightness" || x.action === "set_temperature") && x.value === undefined) throw new AppError(400, "invalid_argument", "This action needs a value");
+      const r = await executeDeviceAction(ctx, hid, a, some[0].id, act, { channel: "agent_server", idempotencyKey: x.idempotency_key });
+      return { device: some[0].name, ...r, done: r.status === "verified" };
+    } }),
+  tool({ name: "list_automations", description: "Automations (when X happens, do Y) with whether each is on and when it last ran.", shape: {}, risk: "read",
+    run: async (ctx, hid, a) => { await requireMember(ctx, hid, a.uid); const s = await ctx.db.collection(paths.col(hid, "automations")).limit(100).get(); return s.docs.map((d) => ({ id: d.id, name: d.data().name, enabled: d.data().enabled !== false, trigger: d.data().trigger, lastStatus: d.data().lastStatus ?? null })); } }),
+  tool({ name: "set_automation_enabled", description: "Turn an automation on or off (owners and administrators).", shape: { automation: z.string().min(1).max(120).describe("Name or id"), enabled: z.boolean() }, risk: "bounded_write",
+    run: async (ctx, hid, a, x) => {
+      const m = await getMembership(ctx, hid, a.uid);
+      if (!m || !["owner", "admin"].includes(m.role)) throw new AppError(403, "forbidden", "Only managers can change automations");
+      const s = await ctx.db.collection(paths.col(hid, "automations")).limit(100).get();
+      const hits = s.docs.filter((d) => d.id === x.automation || String(d.data().name).toLowerCase().includes(x.automation.toLowerCase()));
+      if (hits.length !== 1) throw new AppError(400, "invalid_argument", hits.length ? `More than one automation matches: ${hits.map((d) => d.data().name).join(", ")}` : "No automation with that name");
+      await hits[0].ref.update({ enabled: x.enabled, updatedBy: a.uid, updatedAt: ts(ctx.now()) });
+      return { id: hits[0].id, name: hits[0].data().name, enabled: x.enabled };
+    } }),
+  tool({ name: "create_automation", description: "Propose a new automation (trigger, conditions, actions). Always needs a manager's approval before it exists.",
+    shape: { ...AutomationInput.shape, idempotency_key: idem }, risk: "sensitive", sensitive: "irreversible",
+    run: (ctx, hid, a, x) => { const { idempotency_key, ...auto } = x; return saveAutomation(ctx, a, hid, auto); } }),
+  tool({ name: "list_integrations", description: "Connected services (calendar, messaging, smart-home hubs…) and the tools each offers, with which need approval.", shape: {}, risk: "read",
+    run: async (ctx, hid, a) => (await listIntegrations(ctx, a, hid)).filter((i) => i.status === "connected" && i.category !== "ai_provider").map((i) => ({
+      id: i.id, name: i.name, tools: (PLUGIN_INDEX.get(i.pluginId)?.manifest.tools ?? []).filter((t) => i.enabledTools.includes(t.name)).map((t) => ({ name: t.name, what: t.description, access: t.access, needsApproval: t.confirmation === "approval" || t.physicalSafety })),
+    })) }),
+  tool({ name: "call_integration_tool", description: "Use a connected service's tool (e.g. read the Google Calendar, post to Telegram). Anything that sends or changes something outside HomeHub is held for approval and NOT done until approved. Use list_integrations first.",
+    shape: { integration: z.string().min(1).max(120).describe("Integration name or id"), tool: z.string().min(1).max(64), input: z.record(z.string(), z.unknown()).default({}), idempotency_key: idem }, risk: "reversible_write",
+    run: async (ctx, hid, a, x) => {
+      const items = (await listIntegrations(ctx, a, hid)).filter((i) => i.status === "connected");
+      const q = x.integration.toLowerCase();
+      const hits = items.filter((i) => i.id === x.integration) .concat(items.filter((i) => i.id !== x.integration && (i.name.toLowerCase().includes(q) || i.pluginId.toLowerCase().includes(q))));
+      if (hits.length !== 1) throw new AppError(400, "invalid_argument", hits.length ? `More than one integration matches: ${hits.map((i) => i.name).join(", ")}` : `No connected integration "${x.integration}". Connected: ${items.map((i) => i.name).join(", ") || "none"}`);
+      const r = await executePluginTool(ctx, hid, a, hits[0].id, x.tool, x.input, { channel: "agent_server", idempotencyKey: x.idempotency_key });
+      return r.ok ? { done: true, result: r.data } : { done: false, status: r.status, approvalId: "approvalId" in r ? r.approvalId : undefined, message: r.message };
+    } }),
 
   // ---- reports ----
   tool({ name: "get_household_report", description: "Facts for a period: overview|expenditure|tasks|shopping|maintenance|wastage.",

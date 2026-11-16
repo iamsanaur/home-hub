@@ -82,6 +82,16 @@ Decision recorded: keep both agent runtimes (phone + gateway-orchestrated server
 - Model fallback is a free OpenRouter model (`google/gemma-4-31b-it:free`) in both the proxy and Hermes; free models are rate-limited and weaker at tool calls.
 - Tests this round: emulator suite 104 passed, unit 74 passed, Android unit tests pass, iOS unit tests pass; iOS app builds.
 
+## Assistant tool coverage audit (16 Nov 2026)
+Audit of MCP tools against what the apps can do found the original 31 tools complete but several app features unreachable by the assistant. Added **27 tools (65 total)**, all server-side, role-checked, audited, and subject to the autonomy policy (money changes and automation creation need approval in routine mode; reversible edits don't):
+- Shopping: `list_shopping_lists`, `get_shopping_list`, `update_shopping_item`, `remove_shopping_item`; `mark_item_purchased` now finds items by name (it used to need an id the assistant couldn't look up).
+- Pantry/finance: `adjust_pantry` (used / wasted / restocked), `set_budget`, `record_income`, `update_bill` (fixed bills).
+- Calendar: `update_event`, `cancel_event`. Recipes: `list_recipes`, `create_recipe`. Cleaning: `list_cleaning`, `create_cleaning_routine`, `mark_cleaned`. Notes: `list_notes`, `create_note` (private notes stay private). Memory: `list_memories`, `remember_preference`, `forget_memory`.
+- Devices/automations/services: `list_devices`, `control_device` (read-back verified; locks need approval), `list_automations`, `set_automation_enabled`, `create_automation` (always approval), `list_integrations`, `call_integration_tool` (Telegram, Google Calendar, Home Assistant… through the plugin runtime's own approval policy).
+- Skills updated; a unit test fails if a skill names a missing tool or any tool is unreachable from every skill. Both phone runtimes read the tool list from the server, so they pick the tools up without an app update (the bundled skill text updates with the next app build).
+- Deliberately still app-only: inviting members/changing roles, recording bill payments, documents (file-level privacy), task comments, assets (no screen in the app). Savings goals have no app screen yet.
+- Tests: 83 unit + 117 emulator pass. **Not verified against the live model**: the last live attempts returned provider HTTP 429/402, so the new tools have not been exercised by the real assistant yet.
+
 ## Partial
 - Live LLM: one production run verified (simple tier). Full multi-step workflows (weekly preparation with tools and approvals) not yet run against the live model; automated tests use a provider double.
 - Documents: metadata, categories, restriction and expiry work; **file upload/preview** UI is not built yet (Storage rules are in place and tested).

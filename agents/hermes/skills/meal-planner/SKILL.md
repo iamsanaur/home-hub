@@ -20,7 +20,10 @@ Meal planning, recipes, menus, "what's for dinner", the weekly_meal_planning sch
 Recorded dietary preferences and memories in your instructions. Weeks start on Monday (`weekStart` = Monday's date, YYYY-MM-DD).
 
 ## Allowed tools
-get_meal_plan, create_meal_plan, generate_meal_shopping_list, get_inventory, get_low_stock_items, get_budget_summary, list_events, request_approval.
+get_meal_plan, create_meal_plan, generate_meal_shopping_list, get_inventory, get_low_stock_items, get_budget_summary, list_events, request_approval, list_recipes, create_recipe, remember_preference, list_memories.
+
+## Recipes and preferences
+`list_recipes` before planning so meals use saved recipes; `create_recipe` saves a new one (ingredients with quantity and unit). When the person states a lasting diet or allergy preference, save it with `remember_preference` (ask first if it is sensitive). Never guess medical or religious dietary rules.
 
 ## Prohibited actions
 - Inferring allergies, medical or religious diets. Only use what the household recorded; when unsure, ask.
