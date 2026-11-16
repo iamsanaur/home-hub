@@ -291,6 +291,43 @@ describe("Alexa", () => {
     },
   });
 
+  it("account linking with PKCE: the code needs the matching verifier", async () => {
+    const { createHash } = await import("node:crypto");
+    const email = `alexapkce${Date.now()}@example.com`;
+    const u = await createUser(email);
+    const inv = await invite(ctx, owner, hid, { role: "adult", email });
+    await acceptInvitation(ctx, { uid: u.uid, email, emailVerified: true, displayName: "P" }, inv.token);
+    const form = (o: Record<string, string>) => new URLSearchParams(o).toString();
+    const post = (o: Record<string, string>) => fetch(`${app.url}/oauth/authorize`, { method: "POST", redirect: "manual", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form(o) });
+    const basic = `Basic ${Buffer.from(`${CLIENT.id}:${CLIENT.secret}`).toString("base64")}`;
+    const token = (code: string, extra: Record<string, string> = {}) => fetch(`${app.url}/oauth/token`, { method: "POST", headers: { Authorization: basic, "Content-Type": "application/x-www-form-urlencoded" }, body: form({ grant_type: "authorization_code", code, redirect_uri: CLIENT.redirect, ...extra }) });
+    const verifier = "pkce-verifier-" + "x".repeat(50);
+    const q = { response_type: "code", client_id: CLIENT.id, redirect_uri: CLIENT.redirect, state: "st-p", scope: "homehub",
+      code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" };
+    const getCode = async () => {
+      const page = await fetch(`${app.url}/oauth/authorize?${form(q)}`);
+      expect(page.status).toBe(200);
+      expect(await page.text()).toContain(`name="code_challenge" value="${q.code_challenge}"`); // carried through sign-in
+      const consent = await post({ ...q, step: "signin", email, password: "correct-horse-battery" });
+      const session = /name="session" value="([^"]+)"/.exec(await consent.text())![1];
+      const redirect = await post({ step: "consent", session, householdId: hid });
+      return new URL(redirect.headers.get("location")!).searchParams.get("code")!;
+    };
+    expect((await fetch(`${app.url}/oauth/authorize?${form({ ...q, code_challenge_method: "plain" })}`)).status).toBe(400);
+    // Missing verifier: refused, and the code is spent.
+    const c1 = await getCode();
+    const noVerifier = await token(c1);
+    expect(noVerifier.status).toBe(400);
+    expect((await noVerifier.json()).error).toBe("invalid_grant");
+    expect((await token(c1, { code_verifier: verifier })).status).toBe(400);
+    // Wrong verifier: refused.
+    expect((await token(await getCode(), { code_verifier: "wrong-" + "y".repeat(50) })).status).toBe(400);
+    // Matching verifier: linked.
+    const ok = await token(await getCode(), { code_verifier: verifier });
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).access_token).toMatch(/^hha_/);
+  });
+
   it("account linking: refresh tokens rotate and reuse revokes the link", async () => {
     const { tokens } = await linkUser();
     const basic = `Basic ${Buffer.from(`${CLIENT.id}:${CLIENT.secret}`).toString("base64")}`;

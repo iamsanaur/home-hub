@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { AppError, Ctx, getMembership, newId, paths, sha256, ts } from "../services/base";
 import { recordAuditEvent } from "../services/auditEvents";
@@ -21,6 +21,8 @@ export interface AlexaOAuthConfig {
   redirectUris: string[]; // exact URIs from the Alexa developer console
   webApiKey: string; // Firebase Web API key for email/password sign-in (emulator: any)
   authEmulatorHost?: string;
+  /** Reject authorization requests without a PKCE challenge (RFC 7636). Off by default for compatibility. */
+  requirePkce?: boolean;
 }
 
 export function alexaOAuthConfigFromEnv(): AlexaOAuthConfig | null {
@@ -29,20 +31,46 @@ export function alexaOAuthConfigFromEnv(): AlexaOAuthConfig | null {
   return {
     clientId, clientSecret,
     redirectUris: (process.env.ALEXA_REDIRECT_URIS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-    webApiKey: process.env.FIREBASE_WEB_API_KEY ?? "emulator", authEmulatorHost: process.env.FIREBASE_AUTH_EMULATOR_HOST,
+    webApiKey: process.env.HOMEHUB_WEB_API_KEY ?? process.env.FIREBASE_WEB_API_KEY ?? "emulator", authEmulatorHost: process.env.FIREBASE_AUTH_EMULATOR_HOST,
+    requirePkce: process.env.ALEXA_REQUIRE_PKCE === "true",
   };
 }
 
 function eq(a: string, b: string) { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); }
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
-export interface AuthorizeParams { response_type?: string; client_id?: string; redirect_uri?: string; state?: string; scope?: string }
+export interface AuthorizeParams {
+  response_type?: string; client_id?: string; redirect_uri?: string; state?: string; scope?: string;
+  /** PKCE (RFC 7636). Alexa sends S256 when "PKCE Authorization" is on in the developer console. */
+  code_challenge?: string; code_challenge_method?: string;
+}
+
+// RFC 7636 §4.1/§4.2: verifier is 43–128 unreserved chars; an S256 challenge is 43 base64url chars.
+const VERIFIER_RE = /^[A-Za-z0-9._~-]{43,128}$/;
+const S256_CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/;
+
+/** base64url(SHA-256(verifier)) — the S256 transform. */
+export function pkceS256(verifier: string): string {
+  return createHash("sha256").update(verifier, "ascii").digest("base64url");
+}
+
+/** Constant-time check of a code_verifier against the stored S256 challenge. */
+export function verifyPkce(challenge: string, verifier: string | undefined): boolean {
+  return !!verifier && VERIFIER_RE.test(verifier) && eq(pkceS256(verifier), challenge);
+}
 
 export function validateAuthorize(cfg: AlexaOAuthConfig, p: AuthorizeParams) {
   if (p.response_type !== "code") throw new AppError(400, "unsupported_response_type", "Only the authorization code flow is supported");
   if (!p.client_id || !eq(p.client_id, cfg.clientId)) throw new AppError(400, "invalid_client", "Unknown client");
   if (!p.redirect_uri || !cfg.redirectUris.includes(p.redirect_uri)) throw new AppError(400, "invalid_redirect_uri", "Redirect URI is not registered for this skill");
   if (!p.state || p.state.length > 1024) throw new AppError(400, "invalid_request", "state is required");
+  if (p.code_challenge || p.code_challenge_method) {
+    // Only S256: "plain" would hand the verifier to anyone who sees the authorization request.
+    if ((p.code_challenge_method ?? "plain") !== "S256") throw new AppError(400, "invalid_request", "Only the S256 code_challenge_method is supported");
+    if (!p.code_challenge || !S256_CHALLENGE_RE.test(p.code_challenge)) throw new AppError(400, "invalid_request", "code_challenge is malformed");
+  } else if (cfg.requirePkce) {
+    throw new AppError(400, "invalid_request", "code_challenge is required");
+  }
 }
 
 // ---------------- pages ----------------
@@ -61,7 +89,7 @@ ul{padding-left:20px;margin:8px 0}li{margin:4px 0}.opt{display:flex;gap:10px;ali
 }
 
 export function signInPage(params: AuthorizeParams, error?: string): string {
-  const hidden = (["client_id", "redirect_uri", "state", "scope", "response_type"] as const).map((k) => `<input type="hidden" name="${k}" value="${esc(params[k] ?? "")}">`).join("");
+  const hidden = (["client_id", "redirect_uri", "state", "scope", "response_type", "code_challenge", "code_challenge_method"] as const).map((k) => `<input type="hidden" name="${k}" value="${esc(params[k] ?? "")}">`).join("");
   return page("Link HomeHub with Alexa", `<p>Sign in with your HomeHub account. You'll choose a household and see what Alexa can do before anything is linked.</p>
 ${error ? `<p class="err" role="alert">${esc(error)}</p>` : ""}
 <form method="post" action="authorize" autocomplete="on">${hidden}<input type="hidden" name="step" value="signin">
@@ -111,6 +139,7 @@ export async function handleAuthorizePost(ctx: Ctx, cfg: AlexaOAuthConfig, body:
     const session = randomBytes(24).toString("base64url");
     await ctx.db.doc(`alexaAuthSessions/${sha256(session)}`).set({
       uid, households: households.map((h) => h.id), clientId: body.client_id, redirectUri: body.redirect_uri, state: body.state, scope: body.scope ?? "",
+      codeChallenge: body.code_challenge || null,
       expiresAt: Timestamp.fromDate(new Date(ctx.now().getTime() + 5 * 60_000)),
     });
     return { kind: "html", status: 200, html: consentPage(session, households) };
@@ -123,6 +152,7 @@ export async function handleAuthorizePost(ctx: Ctx, cfg: AlexaOAuthConfig, body:
     const code = randomBytes(24).toString("base64url");
     await ctx.db.doc(`alexaAuthCodes/${sha256(code)}`).set({
       uid: s.uid, householdId: body.householdId, clientId: s.clientId, redirectUri: s.redirectUri, scope: s.scope,
+      codeChallenge: s.codeChallenge ?? null,
       expiresAt: Timestamp.fromDate(new Date(ctx.now().getTime() + 5 * 60_000)),
     });
     const u = new URL(s.redirectUri);
@@ -161,6 +191,8 @@ export async function handleToken(ctx: Ctx, cfg: AlexaOAuthConfig, authHeader: s
     const c = await ctx.db.runTransaction(async (tx) => { const s = await tx.get(ref); if (!s.exists) return null; tx.delete(ref); return s.data()!; });
     if (!c || c.expiresAt.toDate() < ctx.now()) throw new AppError(400, "invalid_grant", "Authorization code is invalid or expired");
     if (body.redirect_uri && body.redirect_uri !== c.redirectUri) throw new AppError(400, "invalid_grant", "redirect_uri mismatch");
+    // PKCE: a code issued with a challenge is only redeemable with the matching verifier (already burnt above either way).
+    if (c.codeChallenge && !verifyPkce(c.codeChallenge, body.code_verifier)) throw new AppError(400, "invalid_grant", "PKCE verification failed");
     // One active link per member+household: re-linking replaces the old one.
     const old = await ctx.db.collection("alexaLinks").where("uid", "==", c.uid).where("householdId", "==", c.householdId).where("status", "==", "linked").get();
     for (const o of old.docs) await revokeLink(ctx, o.id, "relinked");

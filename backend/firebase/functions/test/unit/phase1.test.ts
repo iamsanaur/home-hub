@@ -132,3 +132,29 @@ describe("Alexa Smart Home state", () => {
     expect(stale.properties[0].value).toEqual({ value: "UNREACHABLE" });
   });
 });
+
+import { pkceS256, validateAuthorize, verifyPkce } from "../../src/alexa/oauth";
+describe("Alexa OAuth PKCE (RFC 7636)", () => {
+  const cfg = { clientId: "homehub-alexa", clientSecret: "s", redirectUris: ["https://pitangui.amazon.com/api/skill/link/X"], webApiKey: "k" };
+  const base = { response_type: "code", client_id: "homehub-alexa", redirect_uri: "https://pitangui.amazon.com/api/skill/link/X", state: "s1", scope: "homehub" };
+  it("matches the RFC 7636 Appendix B S256 test vector", () => {
+    expect(pkceS256("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")).toBe("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+    expect(verifyPkce("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")).toBe(true);
+  });
+  it("rejects wrong, missing and malformed verifiers", () => {
+    const ch = pkceS256("a".repeat(43));
+    expect(verifyPkce(ch, "b".repeat(43))).toBe(false);
+    expect(verifyPkce(ch, undefined)).toBe(false);
+    expect(verifyPkce(pkceS256("short"), "short")).toBe(false); // below the 43-char minimum
+  });
+  it("accepts S256 only, validates the challenge, and can require PKCE", () => {
+    const challenge = pkceS256("v".repeat(64));
+    expect(() => validateAuthorize(cfg, { ...base, code_challenge: challenge, code_challenge_method: "S256" })).not.toThrow();
+    expect(() => validateAuthorize(cfg, { ...base, code_challenge: challenge, code_challenge_method: "plain" })).toThrow(/S256/);
+    expect(() => validateAuthorize(cfg, { ...base, code_challenge: challenge })).toThrow(/S256/); // RFC default is plain
+    expect(() => validateAuthorize(cfg, { ...base, code_challenge: "not+base64url", code_challenge_method: "S256" })).toThrow(/malformed/);
+    expect(() => validateAuthorize(cfg, { ...base, code_challenge_method: "S256" })).toThrow(/malformed/);
+    expect(() => validateAuthorize(cfg, base)).not.toThrow();
+    expect(() => validateAuthorize({ ...cfg, requirePkce: true }, base)).toThrow(/required/);
+  });
+});
