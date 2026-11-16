@@ -14,6 +14,8 @@ struct FinanceView: View {
     @State private var budgets: LiveQuery<Record>?
     @State private var adding = false
     @State private var toReview: LiveQuery<Record>?
+    @State private var deletingTxn: Record?
+    @State private var deleteError: String?
 
     var body: some View {
         if let h = hOpt {
@@ -72,7 +74,9 @@ struct FinanceView: View {
                                             .font(HHFont.numeric).foregroundStyle(x.s("type") == "income" ? HH.success : HH.ink)
                                     }
                                     .padding(.horizontal, Space.md).padding(.vertical, Space.sm).frame(minHeight: 56)
+                                    .contextMenu { if h.role.isManager && !x.b("locked") { Button("Delete transaction", systemImage: "trash", role: .destructive) { deletingTxn = x } } }
                                 }
+                                if h.role.isManager { Text("Press and hold a transaction to delete it.").font(HHFont.caption).foregroundStyle(HH.inkTertiary).padding(Space.sm) }
                             }
                         }
                     }
@@ -83,6 +87,10 @@ struct FinanceView: View {
                     ToolbarItem(placement: .primaryAction) { Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add transaction") }
                 }
                 .sheet(isPresented: $adding) { AddTransaction(h: h).presentationDetents([.large]) }
+                .confirmationDialog("Delete this transaction?", isPresented: Binding(get: { deletingTxn != nil }, set: { if !$0 { deletingTxn = nil } }), titleVisibility: .visible, presenting: deletingTxn) { x in
+                    Button("Delete", role: .destructive) { Task { do { try await HouseholdWrites.delete(h.hid, "transactions", id: x.id) } catch { deleteError = error.localizedDescription } } }
+                } message: { _ in Text("It's removed from the household's finances and reports for everyone.") }
+                .alert("Couldn't delete", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) { Button("OK") { deleteError = nil } } message: { Text(deleteError ?? "") }
                 .task(id: month) {
                     if toReview == nil { toReview = LiveQuery(Firestore.firestore().collection("households/\(h.hid)/spendCaptures").whereField("status", isEqualTo: "pending").limit(to: 50)) { Record(id: $0, data: $1) } }
                     let end = Calendar.current.date(byAdding: .month, value: 1, to: month)!
@@ -150,6 +158,7 @@ struct BillsView: View {
     @Environment(\.household) private var hOpt
     @State private var bills: LiveQuery<Record>?
     @State private var selected: Record?
+    @State private var adding = false
     var body: some View {
         if let h = hOpt {
             if !h.canFinance { Screen(title: "Bills") { FinanceLocked() } }
@@ -167,6 +176,8 @@ struct BillsView: View {
                     }
                     Text("Payments are recorded only when you confirm them. HomeHub never pays bills.").font(HHFont.caption).foregroundStyle(HH.inkSecondary).padding(.top, Space.md)
                 }
+                .toolbar { if h.role.isManager { ToolbarItem(placement: .primaryAction) { Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add bill") } } }
+                .sheet(isPresented: $adding) { AddBill(h: h).presentationDetents([.large]) }
                 .task(id: h.hid) { bills = LiveQuery(Firestore.firestore().collection("households/\(h.hid)/bills").order(by: "nextDueAt")) { Record(id: $0, data: $1) } }
                 .sheet(item: $selected) { b in BillDetail(h: h, bill: b).presentationDetents([.large]) }
             }
@@ -183,12 +194,14 @@ private struct BillDetail: View {
     @State private var busy = false
     @State private var error: String?
     @State private var payments: LiveQuery<Record>?
+    @State private var deleting = false
     var body: some View {
         let currency = bill.s("currency") ?? h.currency
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.md) {
                     Text("\(Money.format(bill.i("amountMinor") ?? 0, currency))" + (bill.t("nextDueAt").map { " · due \(Dates.relative($0, tz: h.tz))" } ?? "")).font(HHFont.body)
+                    if bill.s("kind") == "metered" { VendorLedgerSection(h: h, bill: bill) { total in if total > 0 { amount = Money.toInput(total, currency) } } }
                     Text("Record a payment").font(HHFont.label)
                     HHTextField(label: "Amount paid (\(currency))", text: $amount, error: Money.parse(amount, currency: currency) == nil ? "Enter the amount you paid." : nil, keyboard: .decimalPad)
                     ChoiceChips(options: paymentMethods, selection: $method)
@@ -216,12 +229,66 @@ private struct BillDetail: View {
                     let ps = payments?.items ?? []
                     if ps.isEmpty { Text("No payments recorded yet.").font(HHFont.bodyCompact).foregroundStyle(HH.inkSecondary) }
                     ForEach(ps) { p in HStack { Text(p.t("paidAt").map { Dates.short($0, tz: h.tz) } ?? "—").foregroundStyle(HH.inkSecondary); Spacer(); Text(Money.format(p.i("amountMinor") ?? 0, currency)).font(HHFont.numeric) } }
+                    if h.role.isManager { HHButton(title: "Delete bill", kind: .destructive) { deleting = true } }
                 }.padding(Space.lg)
             }
             .navigationTitle(bill.s("name") ?? "Bill").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+            .confirmationDialog("Delete \(bill.s("name") ?? "this bill")?", isPresented: $deleting, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { do { try await HouseholdWrites.delete(h.hid, "bills", id: bill.id); dismiss() } catch { self.error = error.localizedDescription } } }
+            } message: { Text("It stops being tracked and disappears from Bills for everyone. Payments already recorded stay in your financial history.") }
             .onAppear { amount = Money.toInput(bill.i("amountMinor") ?? 0, currency) }
             .task { payments = LiveQuery(Firestore.firestore().collection("households/\(h.hid)/billPayments").whereField("billId", isEqualTo: bill.id).order(by: "paidAt", descending: true).limit(to: 12)) { Record(id: $0, data: $1) } }
+        }
+    }
+}
+
+/// Add a bill: a fixed amount, or one charged per delivery (milk, newspaper, maid, water cans, tiffin).
+private struct AddBill: View {
+    let h: HouseholdContext
+    @Environment(\.dismiss) private var dismiss
+    @State private var perDelivery = false
+    @State private var name = ""
+    @State private var amount = ""
+    @State private var due = Calendar.current.date(byAdding: .day, value: 7, to: .now)!
+    @State private var repeatFreq = "monthly"
+    @State private var category = "Utilities"
+    @State private var tried = false
+    @State private var busy = false
+    @State private var error: String?
+    private let cats = ["Utilities", "Rent", "Insurance", "School fees", "Maintenance", "Loan", "Subscription", "Mobile", "Internet", "Other"]
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.md) {
+                    ChoiceChips(options: [(false, "Fixed amount"), (true, "Pay per delivery")], selection: $perDelivery)
+                    if perDelivery { AddVendorBillForm(h: h) { dismiss() } }
+                    else {
+                        let minor = Money.parse(amount, currency: h.currency).flatMap { $0 > 0 ? $0 : nil }
+                        HHTextField(label: "Bill name", text: $name, error: tried && name.trimmingCharacters(in: .whitespaces).isEmpty ? "Name the bill." : nil, placeholder: "e.g. Electricity")
+                        HHTextField(label: "Amount (\(h.currency))", text: $amount, error: tried && minor == nil ? "Enter the usual amount." : nil, keyboard: .decimalPad)
+                        DatePicker("Next due date", selection: $due, displayedComponents: .date).environment(\.timeZone, h.tz)
+                        ChoiceChips(options: [("monthly", "Monthly"), ("yearly", "Yearly"), ("none", "One-off")], selection: $repeatFreq)
+                        ChoiceChips(options: cats.map { ($0, $0) }, selection: $category)
+                        if let error { Text(error).font(HHFont.bodyCompact).foregroundStyle(HH.danger) }
+                        HHButton(title: "Add bill", loading: busy) {
+                            tried = true
+                            guard let minor, !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                            busy = true
+                            let ts = Timestamp(date: due)
+                            Task {
+                                do {
+                                    _ = try await HouseholdWrites.create(h.hid, "bills", uid: h.uid, ["name": name.trimmingCharacters(in: .whitespaces), "category": category, "provider": NSNull(), "amountMinor": minor, "currency": h.currency,
+                                        "nextDueAt": ts, "seriesStartAt": ts, "recurrence": repeatFreq == "none" ? NSNull() : ["freq": repeatFreq], "reminderDaysBefore": 3, "active": true, "status": "upcoming"])
+                                    dismiss()
+                                } catch { self.error = error.localizedDescription; busy = false }
+                            }
+                        }
+                    }
+                }.padding(Space.lg)
+            }
+            .navigationTitle("Add bill").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
     }
 }

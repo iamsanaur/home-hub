@@ -4,9 +4,11 @@ import { demoDevices } from "./builtins/demoDevices";
 import { webhook } from "./builtins/webhook";
 import { homeAssistant } from "./builtins/homeAssistant";
 import { aiProviderPlugins } from "./builtins/aiProviders";
+import { telegram } from "./builtins/telegram";
+import { googleCalendar } from "./builtins/googleCalendar";
 
 /** Plugins with real, tested implementations. Only these can be connected. */
-export const BUILTIN_PLUGINS: HomeHubPlugin[] = [demoDevices, homeAssistant, webhook, ...aiProviderPlugins];
+export const BUILTIN_PLUGINS: HomeHubPlugin[] = [demoDevices, homeAssistant, webhook, telegram, googleCalendar, ...aiProviderPlugins];
 export const PLUGIN_INDEX = new Map(BUILTIN_PLUGINS.map((p) => [p.manifest.id, p]));
 
 // Fail fast if a built-in manifest ever violates the safety rules.
@@ -46,11 +48,10 @@ const PLANNED: Array<[string, string, string, string, string?]> = [
   ["aqara", "Aqara", "smart_home", "official_api"], ["tuya", "Tuya / Smart Life", "smart_home", "official_api"], ["shelly", "Shelly", "smart_home", "bridge"],
   ["switchbot", "SwitchBot", "smart_home", "official_api"], ["tplink", "TP-Link Kasa / Tapo", "smart_home", "official_api", "Where official interfaces permit."],
   ["sonos", "Sonos", "smart_home", "official_api"], ["roborock", "Roborock", "smart_home", "official_api", "Only where documented APIs exist."],
-  ["telegram", "Telegram bot", "channels", "official_api"], ["whatsapp", "WhatsApp Business", "channels", "official_api", "Approved use cases only."],
+  ["whatsapp", "WhatsApp Business", "channels", "official_api", "Approved use cases only."],
   ["slack", "Slack", "channels", "official_api"], ["discord", "Discord", "channels", "official_api"], ["teams", "Microsoft Teams", "channels", "official_api"],
   ["gmail", "Gmail", "productivity", "official_api", "Read-only bill/receipt extraction with explicit scopes."],
-  ["outlook", "Microsoft Outlook", "productivity", "official_api"], ["google-calendar", "Google Calendar", "productivity", "official_api", "Phase 2 — read-only first."],
-  ["outlook-calendar", "Outlook Calendar", "productivity", "official_api"], ["google-drive", "Google Drive", "productivity", "official_api"],
+  ["outlook", "Microsoft Outlook", "productivity", "official_api"], ["outlook-calendar", "Outlook Calendar", "productivity", "official_api"], ["google-drive", "Google Drive", "productivity", "official_api"],
   ["notion", "Notion", "productivity", "official_api"], ["todoist", "Todoist", "productivity", "official_api"],
   ["account-aggregator", "Bank data (Account Aggregator)", "finance", "official_api", "Only via licensed FIU/FIP partners with consent. Read-only."],
   ["bigbasket", "BigBasket", "shopping", "official_api", "Only through partner interfaces; checkout always needs approval."],

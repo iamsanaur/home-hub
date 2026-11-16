@@ -37,7 +37,7 @@ model:
 # When the primary model is rate-limited or erroring (e.g. provider 429), switch to another provider's model.
 fallback_providers:
   - provider: openrouter
-    model: openai/gpt-4o-mini
+    model: google/gemma-4-31b-it:free
 YAML
   } > "$H/config.yaml"
 

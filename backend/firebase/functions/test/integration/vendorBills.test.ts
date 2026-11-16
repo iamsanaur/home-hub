@@ -130,6 +130,20 @@ describe("the assistant can run vendor bills, bulk pantry and propose deletions"
     expect(JSON.stringify(await run("record_deliveries", { bill: "newspaper", entries: [{ date: "2026-11-12", quantity: 0 }] }))).toMatch(/Your pay-per-delivery bills: Milk vendor/);
   });
 
+  it("reads the argument shapes models send: explicit entries win over a stray `date`, shorthand dates, from/to", async () => {
+    await createVendorBill(ctx, hid, owner, milk);
+    // What the live model actually sent: a `date` next to the real entries (the extra date must not overwrite quantity 2).
+    await run("record_deliveries", { date: "2026-11-14", items: [{ name: "milk", quantity: 0 }], entries: [{ date: "2026-11-14", quantity: 2 }] });
+    await run("record_deliveries", { dates: ["2026-11-03", "2026-11-04"], quantity: 0 });
+    await run("record_deliveries", { from: "2026-11-09", to: "2026-11-11" });
+    await run("record_deliveries", { date: "2026-11-20", items: [{ quantity: 3 }] });
+    const led = await run("get_bill_ledger", {}) as { exceptions: Array<{ date: string; quantity: number }> };
+    const by = Object.fromEntries(led.exceptions.map((e) => [e.date, e.quantity]));
+    expect(by).toMatchObject({ "2026-11-14": 2, "2026-11-03": 0, "2026-11-04": 0, "2026-11-09": 0, "2026-11-10": 0, "2026-11-11": 0, "2026-11-20": 3 });
+    expect(by["2026-11-12"]).toBeUndefined();
+    expect(JSON.stringify(await run("record_deliveries", {}))).toMatch(/Nothing to record/);
+  });
+
   it("adds pantry items in bulk, merging with what's there", async () => {
     await addPantryItems(ctx, hid, owner, [{ name: "Rice", quantity: 1, unit: "kg" }]);
     const r = await run("add_pantry_items", { items: [{ name: "rice", quantity: 2, unit: "kg" }, { name: "Milk", quantity: 2, unit: "l" }, { name: "Eggs", quantity: 12 }, { name: "milk", quantity: 1, unit: "l" }] }) as { created: number; updated: number };

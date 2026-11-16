@@ -11,6 +11,7 @@
 		05DB7A2EA085ABABE7A41B15 /* Connect.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA91630EC4275728D9F96F86 /* Connect.swift */; };
 		0868BF6D4941A605AD1A5457 /* Food.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89FD712131B3A9991A6E98 /* Food.swift */; };
 		0CBB5023CF36D219F1056AD4 /* Shared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A391030EA963C677BD0911A /* Shared.swift */; };
+		199E850371579D2829DA2446 /* PantryParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB6D60D51A020F043B6D1A65 /* PantryParser.swift */; };
 		1D1B4ACF65157E57B6FEDA6D /* Gateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = F011CCB5E0F4D6856B1AE024 /* Gateway.swift */; };
 		1F45EB0A78FAFA97D2CBB756 /* HermesSkills in Resources */ = {isa = PBXBuildFile; fileRef = 24E4DEB6FACB0D634A021F8A /* HermesSkills */; };
 		21C35A63988A6E409C8DFBC7 /* AIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DE70DAD411C2BD7A33D24FF /* AIView.swift */; };
@@ -20,6 +21,7 @@
 		3E2DFDC0F89130DF2F65FA0E /* HomeManageTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 625927E67861BA2406286C96 /* HomeManageTasks.swift */; };
 		40ED96791B1A32D00DECE84D /* NotificationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1E1E686A9100E71ADEF454 /* NotificationPrompt.swift */; };
 		488565752D0996FC66C926CB /* ConnectionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E010EB7DBA75CC1591B89A /* ConnectionsTests.swift */; };
+		62C3863A090972B3FD3DCBEB /* VendorBills.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07FD0DE2C07236ECD248FA1D /* VendorBills.swift */; };
 		664E0A9A1D168A3D974FF2F0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BACC9F6AB795DB4E0BFCB36B /* GoogleService-Info.plist */; };
 		67B4256E9B83C9CE5661B21D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 992C0967272AB26619444709 /* Models.swift */; };
 		70DF41316A00641133C15A0E /* Money.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC4AD28ABA569D23C87E6A9 /* Money.swift */; };
@@ -30,6 +32,7 @@
 		82D65671D72C0318A4D551B4 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 59084E80643DF4E349A0D498 /* FirebaseStorage */; };
 		8338B37929CCCB403851ABA3 /* Offline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D7A282AD34EEDE60227EDB8 /* Offline.swift */; };
 		85B0EDB46E6B4EC76DF30065 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2760B65C90CBCC55B35D3191 /* Assets.xcassets */; };
+		8EF5401CF196ACE9A19E151A /* PantryParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E622E1EAC54EF2CCB8D17CD3 /* PantryParserTests.swift */; };
 		9AC52EEC58300A0D570B4EB5 /* SpendFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39C172404E4C3CCBCF38ED62 /* SpendFilterTests.swift */; };
 		9D73215296E408F1ECF2DEDA /* LiveQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 231BB2CAF6E672D9436BB166 /* LiveQuery.swift */; };
 		9ECC080E32B19DA640701342 /* Onboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 078C673B993C0A4AE99E58D9 /* Onboarding.swift */; };
@@ -40,6 +43,7 @@
 		C7C7936B7FA5BEBECC1A183D /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666E97970FC3A7EAB159DE20 /* Profile.swift */; };
 		CD11127471D8495F87E9739B /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E85B7AC5BCA9421CB295F4 /* Tokens.swift */; };
 		CE7856A15EC312DF7E9F2CC0 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = F7FD3ACF3927E16489A6A408 /* FirebaseAuth */; };
+		CFB5B13A89716524D7767337 /* BulkPantry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F23A4292D72BCA5511FB3B /* BulkPantry.swift */; };
 		D0032BAF9E31B8D3853E3712 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 3D059E657276A3251892F0A3 /* FirebaseAppCheck */; };
 		D05EAD171D89DF02C3F17C8C /* AgentLoop.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4693CD144C5E91526199167 /* AgentLoop.swift */; };
 		E1DA428CB65E32F215E34D1D /* Dates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31325B0F762C004137CC019D /* Dates.swift */; };
@@ -72,6 +76,7 @@
 		0688AF7D39A5D862C5554D1F /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		078C673B993C0A4AE99E58D9 /* Onboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Onboarding.swift; sourceTree = "<group>"; };
 		0795816AE85385F3700B1543 /* HermesMobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesMobileTests.swift; sourceTree = "<group>"; };
+		07FD0DE2C07236ECD248FA1D /* VendorBills.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VendorBills.swift; sourceTree = "<group>"; };
 		1F40327314DF68261C88E605 /* ProductionSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionSmokeTests.swift; sourceTree = "<group>"; };
 		231BB2CAF6E672D9436BB166 /* LiveQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveQuery.swift; sourceTree = "<group>"; };
 		24E4DEB6FACB0D634A021F8A /* HermesSkills */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HermesSkills; path = ../agents/hermes/skills; sourceTree = SOURCE_ROOT; };
@@ -96,14 +101,17 @@
 		992C0967272AB26619444709 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		9C4C2E5DEA8AC1AFDF149DA5 /* HermesCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesCore.swift; sourceTree = "<group>"; };
 		9D8699F9C52AE7118E7B8F35 /* LaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchTests.swift; sourceTree = "<group>"; };
+		A1F23A4292D72BCA5511FB3B /* BulkPantry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkPantry.swift; sourceTree = "<group>"; };
 		A3C1D9A149A12CC9AF610786 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A9E85B7AC5BCA9421CB295F4 /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
 		BACC9F6AB795DB4E0BFCB36B /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		C03835B534283FF3F282ECFA /* HomeHub.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HomeHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CCFE5CA2AF54A85D8B2A028A /* HomeHubTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HomeHubTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CEC4AD28ABA569D23C87E6A9 /* Money.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Money.swift; sourceTree = "<group>"; };
+		DB6D60D51A020F043B6D1A65 /* PantryParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PantryParser.swift; sourceTree = "<group>"; };
 		E0E010EB7DBA75CC1591B89A /* ConnectionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionsTests.swift; sourceTree = "<group>"; };
 		E4693CD144C5E91526199167 /* AgentLoop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLoop.swift; sourceTree = "<group>"; };
+		E622E1EAC54EF2CCB8D17CD3 /* PantryParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PantryParserTests.swift; sourceTree = "<group>"; };
 		E6430AC88E2AA9FE6A38118D /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		EAF9D3FE13C2C26FCBE10EBD /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		EBD2FADC8A836532AED62245 /* FirebaseBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseBootstrap.swift; sourceTree = "<group>"; };
@@ -134,17 +142,20 @@
 			children = (
 				6DE70DAD411C2BD7A33D24FF /* AIView.swift */,
 				0688AF7D39A5D862C5554D1F /* Auth.swift */,
+				A1F23A4292D72BCA5511FB3B /* BulkPantry.swift */,
 				FA91630EC4275728D9F96F86 /* Connect.swift */,
 				2C89FD712131B3A9991A6E98 /* Food.swift */,
 				625927E67861BA2406286C96 /* HomeManageTasks.swift */,
 				FD381FF4BBECD2EB9614D3A5 /* MoneyViews.swift */,
 				FE1E1E686A9100E71ADEF454 /* NotificationPrompt.swift */,
 				078C673B993C0A4AE99E58D9 /* Onboarding.swift */,
+				DB6D60D51A020F043B6D1A65 /* PantryParser.swift */,
 				670B2E2FCFDE4015766198C1 /* People.swift */,
 				666E97970FC3A7EAB159DE20 /* Profile.swift */,
 				7BB1A75FF76F7942DA440EA7 /* Records.swift */,
 				8A391030EA963C677BD0911A /* Shared.swift */,
 				89318DFAE4FDFB2DBA1A3820 /* SpendCapture.swift */,
+				07FD0DE2C07236ECD248FA1D /* VendorBills.swift */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -277,6 +288,7 @@
 			isa = PBXGroup;
 			children = (
 				0795816AE85385F3700B1543 /* HermesMobileTests.swift */,
+				E622E1EAC54EF2CCB8D17CD3 /* PantryParserTests.swift */,
 				39C172404E4C3CCBCF38ED62 /* SpendFilterTests.swift */,
 			);
 			path = HomeHubTests;
@@ -418,6 +430,7 @@
 				D05EAD171D89DF02C3F17C8C /* AgentLoop.swift in Sources */,
 				C693BE678348E88B301E14C3 /* AppModel.swift in Sources */,
 				F807DDF1FF5DC89E3A863E42 /* Auth.swift in Sources */,
+				CFB5B13A89716524D7767337 /* BulkPantry.swift in Sources */,
 				303C6AA37145AE8428D4FF25 /* Components.swift in Sources */,
 				05DB7A2EA085ABABE7A41B15 /* Connect.swift in Sources */,
 				E1DA428CB65E32F215E34D1D /* Dates.swift in Sources */,
@@ -436,6 +449,7 @@
 				40ED96791B1A32D00DECE84D /* NotificationPrompt.swift in Sources */,
 				8338B37929CCCB403851ABA3 /* Offline.swift in Sources */,
 				9ECC080E32B19DA640701342 /* Onboarding.swift in Sources */,
+				199E850371579D2829DA2446 /* PantryParser.swift in Sources */,
 				B999630A788251CEDFA0B416 /* People.swift in Sources */,
 				C7C7936B7FA5BEBECC1A183D /* Profile.swift in Sources */,
 				054D060032B594DE3B2680B5 /* Records.swift in Sources */,
@@ -443,6 +457,7 @@
 				0CBB5023CF36D219F1056AD4 /* Shared.swift in Sources */,
 				72A51312B0D791FF99BC5DDD /* SpendCapture.swift in Sources */,
 				CD11127471D8495F87E9739B /* Tokens.swift in Sources */,
+				62C3863A090972B3FD3DCBEB /* VendorBills.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -451,6 +466,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A816047C6C91CA258C29510 /* HermesMobileTests.swift in Sources */,
+				8EF5401CF196ACE9A19E151A /* PantryParserTests.swift in Sources */,
 				9AC52EEC58300A0D570B4EB5 /* SpendFilterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

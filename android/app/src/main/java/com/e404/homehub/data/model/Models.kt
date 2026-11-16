@@ -73,11 +73,12 @@ data class Budget(val id: String, val period: String, val category: String?, val
     companion object { fun from(d: DocumentSnapshot) = Budget(d.id, d.str("period") ?: "", d.str("category"), d.long("limitMinor") ?: 0) }
 }
 
-data class Bill(val id: String, val name: String, val category: String?, val amountMinor: Long, val currency: String, val nextDueAt: Instant?, val recurrence: String?, val lastPaidAt: Instant?, val reminderDaysBefore: Int, val active: Boolean, val version: Long) {
+data class Bill(val id: String, val name: String, val category: String?, val amountMinor: Long, val currency: String, val nextDueAt: Instant?, val recurrence: String?, val lastPaidAt: Instant?, val reminderDaysBefore: Int, val active: Boolean, val version: Long, val metered: Boolean = false, val meterUnit: String? = null, val meterRateMinor: Long = 0) {
     companion object {
         fun from(d: DocumentSnapshot): Bill {
             @Suppress("UNCHECKED_CAST") val r = d.get("recurrence") as? Map<String, Any?>
-            return Bill(d.id, d.str("name") ?: "Bill", d.str("category"), d.long("amountMinor") ?: 0, d.str("currency") ?: "INR", d.instant("nextDueAt"), r?.get("freq") as? String, d.instant("lastPaidAt"), d.long("reminderDaysBefore")?.toInt() ?: 3, d.getBoolean("active") ?: true, d.long("version") ?: 1)
+            return Bill(d.id, d.str("name") ?: "Bill", d.str("category"), d.long("amountMinor") ?: 0, d.str("currency") ?: "INR", d.instant("nextDueAt"), r?.get("freq") as? String, d.instant("lastPaidAt"), d.long("reminderDaysBefore")?.toInt() ?: 3, d.getBoolean("active") ?: true, d.long("version") ?: 1,
+                d.str("kind") == "metered", (d.get("meter") as? Map<String, Any?>)?.get("unit") as? String, ((d.get("meter") as? Map<String, Any?>)?.get("rateMinor") as? Number)?.toLong() ?: 0)
         }
     }
 }

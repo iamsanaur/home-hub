@@ -17,6 +17,7 @@ private struct ShoppingContent: View {
     @State private var selected: String?
     @State private var adding = false
     @State private var newList = false
+    @State private var deletingList = false
 
     var body: some View {
         let ls = lists?.items ?? []
@@ -47,7 +48,11 @@ private struct ShoppingContent: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) { Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add item").disabled(active == nil) }
             if h.role.isAdultPlus || h.role == .staff { ToolbarItem(placement: .secondaryAction) { Button("New list") { newList = true } } }
+            if h.role.isAdultPlus, active != nil { ToolbarItem(placement: .secondaryAction) { Button("Delete this list", role: .destructive) { deletingList = true } } }
         }
+        .confirmationDialog("Delete \(active?.s("name") ?? "this list")?", isPresented: $deletingList, titleVisibility: .visible) {
+            Button("Delete list", role: .destructive) { if let a = active { selected = nil; Task { try? await HouseholdWrites.delete(h.hid, "shoppingLists", id: a.id) } } }
+        } message: { Text("The list and its items are removed for everyone.") }
         .sheet(isPresented: $adding) { if let a = active { AddGrocery(h: h, listId: a.id).presentationDetents([.medium, .large]) } }
         .sheet(isPresented: $newList) { NewList(h: h) { selected = $0 }.presentationDetents([.medium]) }
         .task(id: h.hid) { lists = LiveQuery(Firestore.firestore().collection("households/\(h.hid)/shoppingLists").whereField("archived", isEqualTo: false)) { Record(id: $0, data: $1) } }
@@ -139,13 +144,14 @@ struct PantryView: View {
     @Environment(\.household) private var hOpt
     @State private var q: LiveQuery<Record>?
     @State private var editing: Record?
+    @State private var bulk = false
     var body: some View {
         if let h = hOpt {
             let items = q?.items ?? []
             let soon = Date.now.addingTimeInterval(3 * 86400)
             Screen(title: "Pantry") {
                 if case .loading = q?.state ?? .loading { LoadingSkeleton() }
-                else if items.isEmpty { EmptyStateView(systemImage: "refrigerator", title: "Pantry is empty", message: "Track staples with a minimum level and HomeHub will tell you when they run low.") }
+                else if items.isEmpty { EmptyStateView(systemImage: "refrigerator", title: "Pantry is empty", message: "Track staples with a minimum level and HomeHub will tell you when they run low.", actionTitle: h.role.isAdultPlus ? "Add several items" : nil) { bulk = true } }
                 let low = items.filter { $0.b("lowStock") }
                 if !low.isEmpty {
                     HHCard {
@@ -171,6 +177,8 @@ struct PantryView: View {
                     }
                 }
             }
+            .toolbar { if h.role.isAdultPlus { ToolbarItem(placement: .primaryAction) { Button { bulk = true } label: { Image(systemName: "text.badge.plus") }.accessibilityLabel("Add several items") } } }
+            .sheet(isPresented: $bulk) { BulkPantrySheet(h: h, existing: items).presentationDetents([.large]) }
             .task(id: h.hid) { q = LiveQuery(Firestore.firestore().collection("households/\(h.hid)/pantryItems").order(by: "name")) { Record(id: $0, data: $1) } }
             .sheet(item: $editing) { r in PantryAdjust(h: h, item: r).presentationDetents([.medium]) }
         }
@@ -182,6 +190,7 @@ private struct PantryAdjust: View {
     @Environment(\.dismiss) private var dismiss
     @State private var amount = ""
     @State private var busy = false
+    @State private var deleting = false
     @State private var error: String?
     var body: some View {
         NavigationStack {
@@ -195,10 +204,14 @@ private struct PantryAdjust: View {
                 }
                 if let error { Text(error).font(HHFont.bodyCompact).foregroundStyle(HH.danger) }
                 Text("Every change is recorded in the stock history, including waste.").font(HHFont.caption).foregroundStyle(HH.inkSecondary)
+                if h.role.isAdultPlus { HHButton(title: "Delete item", kind: .destructive) { deleting = true } }
                 Spacer()
             }
             .padding(Space.lg).navigationTitle(item.s("name") ?? "Item").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+            .confirmationDialog("Delete \(item.s("name") ?? "this item")?", isPresented: $deleting, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { do { try await HouseholdWrites.delete(h.hid, "pantryItems", id: item.id); dismiss() } catch { self.error = "Couldn't delete. Try again." } } }
+            } message: { Text("It's removed from the pantry for everyone. Past stock history stays.") }
         }
     }
     private func apply(_ kind: String) {

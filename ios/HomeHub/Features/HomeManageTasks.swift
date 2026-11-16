@@ -214,6 +214,8 @@ private struct TasksContent: View {
     @State private var filter = 0
     @State private var editing = false
     @State private var undo: TaskItem?
+    @State private var deleting: TaskItem?
+    @State private var deleteError: String?
 
     var body: some View {
         let tasks = all.filter { $0.householdId == h.hid }.map(\.model)
@@ -237,10 +239,18 @@ private struct TasksContent: View {
                             model.offline.setTaskDone(hid: h.hid, uid: h.uid, id: t.id, done: done)
                             if done { undo = t }
                         }
+                        .contextMenu { if h.role.isAdultPlus { Button("Delete task", systemImage: "trash", role: .destructive) { deleting = t } } }
                     }
                 }
+                if h.role.isAdultPlus { Text("Press and hold a task to delete it.").font(HHFont.caption).foregroundStyle(HH.inkTertiary) }
             }
         }
+        .confirmationDialog("Delete this task?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible, presenting: deleting) { t in
+            Button("Delete “\(t.title)”", role: .destructive) {
+                Task { do { try await HouseholdWrites.delete(h.hid, "tasks", id: t.id) } catch { deleteError = error.localizedDescription } }
+            }
+        } message: { _ in Text("It's removed for everyone in the household.") }
+        .alert("Couldn't delete", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) { Button("OK") { deleteError = nil } } message: { Text(deleteError ?? "") }
         .overlay(alignment: .bottom) {
             if let u = undo {
                 HStack { Text("Completed “\(u.title)”").font(HHFont.bodyCompact).lineLimit(1); Spacer(); Button("Undo") { model.offline.setTaskDone(hid: h.hid, uid: h.uid, id: u.id, done: false); undo = nil }.bold() }

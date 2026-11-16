@@ -83,4 +83,15 @@ class AgentRepository(private val db: FirebaseFirestore, private val gateway: Ga
         })!!.jsonObject
     suspend fun memories(hid: String): JsonObject = gateway.call("GET", "/v1/households/$hid/memories")!!.jsonObject
     suspend fun deleteMemory(hid: String, id: String) { gateway.call("DELETE", "/v1/households/$hid/memories/$id") }
+
+    // ---- pay-per-delivery (vendor) bills ----
+    suspend fun createVendorBill(hid: String, body: JsonObject): JsonObject = gateway.call("POST", "/v1/households/$hid/vendor-bills", body)!!.jsonObject
+    suspend fun updateVendorBill(hid: String, billId: String, body: JsonObject): JsonObject = gateway.call("PATCH", "/v1/households/$hid/vendor-bills/$billId", body)!!.jsonObject
+    suspend fun billLedger(hid: String, billId: String, month: String?): JsonObject =
+        gateway.call("GET", "/v1/households/$hid/vendor-bills/$billId/ledger" + (month?.let { "?month=$it" } ?: ""))!!.jsonObject
+    /** quantity: 0 = didn't come, a number = that quantity, null = back to the normal schedule. */
+    suspend fun setDeliveries(hid: String, billId: String, entries: List<Pair<String, Double?>>): JsonObject =
+        gateway.call("PUT", "/v1/households/$hid/vendor-bills/$billId/deliveries", buildJsonObject {
+            put("entries", kotlinx.serialization.json.JsonArray(entries.map { (d, q) -> buildJsonObject { put("date", d); put("quantity", q?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) } }))
+        })!!.jsonObject
 }

@@ -71,7 +71,16 @@ Decision recorded: keep both agent runtimes (phone + gateway-orchestrated server
 - **Native Connections area on both apps: Done.** Connections hub, AI model accounts, Integrations catalog (connect/test/pause/disconnect), Devices (control with read-back verification, Alexa exposure per room/device), Automations (create, enable, preview, run, history, delete), Channels and Alexa, Agents and skills, Activity and audit, Privacy. Android `ConnectScreens.kt`; iOS `Features/Connect.swift`, reached from Manage → Connections (adults only).
 - **Phase 2 — partial.** Automation engine done (schedule, device state, pantry low, bill due, webhook triggers; loop guard, cooldown, daily cap). Bridge pairing with one-time codes done; bridge devices are read-only. **Not built:** Home Assistant/Matter control, Google/Outlook calendar and Gmail read-only connectors, app voice.
 - **Phase 3 — Alexa: implemented, mocked only.** OAuth account linking with rotating refresh tokens, Smart Home discovery/control/state reporting (voice unlock refused), custom skill intents, request-signature verification, Lambda forwarder, skill package (en-IN, en-US). Tested only with mocked Alexa requests; see `docs/alexa.md`.
-- **Phases 4–5: not started** (finance/grocery/media connectors, marketplace, certification).
+- **Phase 4: not started** (finance/grocery/media connectors — partner-gated, listed as Planned). **Phase 5: foundations done** — plugin SDK guide (`docs/plugin-sdk.md`), versioning rules, diagnostics, certification checklist (`docs/plugin-certification.md`) and `scripts/validate-plugin.ts`. A marketplace listing/install service is not built.
+
+## Updates — 16 Nov 2026 (vendor bills, deletes, bulk pantry, channels)
+- **Pay-per-delivery (vendor) bills** — milk per liter, newspaper, maid, water cans, tiffin. Integer-only maths (thousandths × rate), per-month ledger storing only exceptions (skipped / extra days), month closes on payment, price changes apply from next month unless "this month too". Backend: `core/vendorBill.ts`, `services/vendorBills.ts`, routes under `/v1/households/:hid/vendor-bills`, MCP tools `list_bills`, `create_vendor_bill`, `update_vendor_bill`, `record_deliveries`, `get_bill_ledger`. UI on **both apps**: "Pay per delivery" in Add bill, month day grid (tap a day: didn't come / normal / quantity), totals, price change, payment prefilled with the month total.
+- **Assistant**: finance skill teaches the vendor procedure; vendor/delivery wording routes to the stronger model tier; `record_deliveries` accepts the argument shapes models actually send; Hermes `delegation` toolset disabled (the model was delegating and falsely reporting success). **Not yet re-verified end to end on production**: the last live run was blocked by OpenRouter credits (HTTP 402) and the QA household's test bill still has wrong 12th/14th entries from an earlier bug (fixed since; emulator tests cover the logic).
+- **Deleting records** — owners/administrators can delete bills, transactions, tasks, shopping lists and pantry items on **both apps**; the assistant deletes only through the `delete_record` approval. Locked transactions cannot be deleted. Activity-feed entries can be deleted/cleared by owners and administrators (audited).
+- **Bulk pantry** — paste or type a list; on-device parser (identical rules and the same 10 test cases on Android and iOS), preview with "Adds to existing / New", duplicate merge, storage location; plus the assistant tool `add_pantry_items`.
+- **Channels/productivity**: Telegram bot (outbound only, every message needs approval) and Google Calendar **read-only via the private iCal address** (no Google sign-in; recurrence expanded). Both unit-tested with fakes; **not exercised against the live Telegram/Google services** (needs a bot token / calendar address from the household).
+- Model fallback is a free OpenRouter model (`google/gemma-4-31b-it:free`) in both the proxy and Hermes; free models are rate-limited and weaker at tool calls.
+- Tests this round: emulator suite 104 passed, unit 74 passed, Android unit tests pass, iOS unit tests pass; iOS app builds.
 
 ## Partial
 - Live LLM: one production run verified (simple tier). Full multi-step workflows (weekly preparation with tools and approvals) not yet run against the live model; automated tests use a provider double.
@@ -85,6 +94,5 @@ Decision recorded: keep both agent runtimes (phone + gateway-orchestrated server
 
 ## Blocked (credentials / accounts)
 - APNs key for FCM on iOS; App Check registration (App Attest / Play Integrity), then `ENFORCE_APP_CHECK=true`.
-- Stable public URL for server Hermes (named Cloudflare tunnel or an always-on host) — today it uses a quick tunnel from this Mac.
 - Alexa: Amazon developer account, skill registration, Login with Amazon client, Lambda deployment and certification. Until then the Channels screen shows Alexa as "Awaiting setup".
 - OpenRouter app registration for production redirect URIs.

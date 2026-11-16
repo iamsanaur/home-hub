@@ -309,6 +309,7 @@ private fun BillDetailSheet(bill: Bill, onDismiss: () -> Unit) {
     val minor = Money.parse(amount, bill.currency)?.takeIf { it > 0 }
     FormSheet(bill.name, onDismiss) {
         Text("${Money.format(bill.amountMinor, bill.currency)} · " + (bill.nextDueAt?.let { "due ${Dates.relative(it, h.zone)}" } ?: "no due date") + (bill.recurrence?.let { " · repeats $it" } ?: ""), style = t.body, color = c.ink)
+        if (bill.metered) VendorLedgerSection(bill) { total -> if (total > 0) amount = Money.toInput(total, bill.currency) }
         Text("Record a payment", style = t.label, color = c.ink)
         HomeHubTextField("Amount paid (${bill.currency})", amount, { amount = it }, keyboardType = KeyboardType.Decimal, error = if (minor == null) "Enter the amount you paid." else null)
         SegmentedFilter(PAYMENT_METHODS.map { it.second }, PAYMENT_METHODS.indexOfFirst { it.first == method }, { method = PAYMENT_METHODS[it].first })
@@ -357,10 +358,13 @@ private fun AddBillSheet(onDismiss: () -> Unit) {
     var repeat by rememberSaveable { mutableStateOf("monthly") }
     var category by rememberSaveable { mutableStateOf("Utilities") }
     var tried by remember { mutableStateOf(false) }
+    var perDelivery by rememberSaveable { mutableStateOf(false) }
     val minor = Money.parse(amount, h.currency)?.takeIf { it > 0 }
     val d = runCatching { LocalDate.parse(due) }.getOrNull()
     val cats = listOf("Utilities", "Rent", "Insurance", "School fees", "Maintenance", "Loan", "Subscription", "Mobile", "Internet", "Other")
     FormSheet("Add bill", onDismiss) {
+        SegmentedFilter(listOf("Fixed amount", "Pay per delivery"), if (perDelivery) 1 else 0, { perDelivery = it == 1 })
+        if (perDelivery) { AddVendorBillForm(onDismiss); return@FormSheet }
         HomeHubTextField("Bill name", name, { name = it }, placeholder = "e.g. Electricity", error = if (tried && name.isBlank()) "Name the bill." else null)
         HomeHubTextField("Amount (${h.currency})", amount, { amount = it }, keyboardType = KeyboardType.Decimal, error = if (tried && minor == null) "Enter the usual amount." else null)
         HomeHubTextField("Next due date", due, { due = it }, placeholder = "YYYY-MM-DD", error = if (d == null) "Use YYYY-MM-DD" else null)
