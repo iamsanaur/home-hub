@@ -14,7 +14,7 @@ import {
   addShoppingItem, createMealPlan, createShoppingList, generateMealShoppingList, getInventory, getLowStockItems,
   getMealPlan, markItemPurchased,
 } from "../services/food";
-import { getBillStatus, getBudgetSummary, listExpenses, listBills, recordExpense } from "../services/finance";
+import { createFixedBill, getBillStatus, getBudgetSummary, listExpenses, listBills, recordExpense } from "../services/finance";
 import { addPantryItems, PantryBulkItem } from "../services/food";
 import { createVendorBill, getBillLedger, resolveBill, setDeliveries, updateVendorBill } from "../services/vendorBills";
 import { parseDecimal } from "../core/money";
@@ -129,9 +129,23 @@ export const TOOLS: ToolDef[] = [
   tool({ name: "list_bills", description: "All active bills: id, name, vendor, amount, next due date, and for pay-per-delivery bills (milk, newspaper, maid…) the unit and rate. Use this to find a bill id.",
     shape: {}, risk: "read", run: (ctx, hid, a) => listBills(ctx, hid, a) }),
 
+  tool({ name: "create_bill",
+    description: "Create a bill with a FIXED amount: rent, a househelp's or driver's monthly salary, insurance, loan EMI, school fees, subscriptions, utilities. Use this whenever the person gives one amount for the period (e.g. '₹2,000 a month', 'rent 13,000'). amount is in MAJOR units (₹13,000 → 13000). Do NOT use create_vendor_bill for these.",
+    shape: {
+      name: z.string().min(1).max(120).describe("e.g. 'Rent'"), provider: z.string().max(120).optional(),
+      amount: z.number().positive().max(100_000_000).describe("the full amount for each period in major units, at most 2 decimals"),
+      due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("next due date YYYY-MM-DD"),
+      repeat: z.enum(["monthly", "yearly", "none"]).default("monthly"), category: z.string().max(60).default("Utilities"),
+      idempotency_key: idem,
+    }, risk: "reversible_write",
+    run: async (ctx, hid, a, x) => {
+      const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR";
+      return createFixedBill(ctx, hid, a, { name: x.name, provider: x.provider, amountMinor: parseDecimal(String(x.amount), cur).amountMinor, dueDate: x.due_date, repeat: x.repeat, category: x.category, reminderDaysBefore: 3, idempotencyKey: x.idempotency_key });
+    } }),
+
   // ---- vendor bills: pay by what was actually delivered (milk per liter, newspaper per copy, maid per day, water cans, tiffin) ----
   tool({ name: "create_vendor_bill",
-    description: "Create a bill whose monthly amount is quantity delivered × rate, so days the vendor doesn't come are not charged. Examples: milk (unit l, ₹60/l, 1 l a day), newspaper (copies), maid or cook (days, weekdays Mon–Sat), water cans, tiffin (meals). rate_per_unit is in MAJOR units (₹60 → 60, ₹52.50 → 52.5). The bill for a month's deliveries falls due on due_day of the next month.",
+    description: "ONLY for a bill that is priced PER UNIT delivered, where a missed day is not charged: milk per liter, newspaper per copy, maid paid per day worked, water cans, tiffin per meal. If the person gives a single monthly/fixed amount (rent, a salary, '₹2,000 a month'), use create_bill instead. If you are unsure whether the amount is per unit or per month, ask. The monthly amount is quantity delivered × rate. Examples: milk (unit l, ₹60/l, 1 l a day), newspaper (copies), maid or cook (days, weekdays Mon–Sat), water cans, tiffin (meals). rate_per_unit is in MAJOR units (₹60 → 60, ₹52.50 → 52.5). The bill for a month's deliveries falls due on due_day of the next month.",
     shape: {
       name: z.string().min(1).max(120).describe("e.g. 'Milk vendor'"), vendor: z.string().max(120).optional().describe("vendor's name"),
       unit: z.string().min(1).max(20).default("l").describe("l, kg, copies, days, cans, meals…"),

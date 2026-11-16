@@ -144,6 +144,17 @@ describe("the assistant can run vendor bills, bulk pantry and propose deletions"
     expect(JSON.stringify(await run("record_deliveries", {}))).toMatch(/Nothing to record/);
   });
 
+  it("create_bill stores a fixed monthly amount exactly as given (not multiplied by days)", async () => {
+    const rent = await run("create_bill", { name: "Rent", amount: 13000, due_date: "2026-12-02" }) as { id: string; amountMinor: number };
+    const help = await run("create_bill", { name: "Househelp", amount: 2000, due_date: "2026-12-01" }) as { id: string; amountMinor: number };
+    expect(rent.amountMinor).toBe(1_300_000); expect(help.amountMinor).toBe(200_000);
+    const d = (await ctx.db.doc(`households/${hid}/bills/${rent.id}`).get()).data()!;
+    expect(d).toMatchObject({ name: "Rent", amountMinor: 1_300_000, active: true, recurrence: { freq: "monthly" } });
+    expect(d.kind).toBeUndefined();
+    const list = await run("list_bills", {}) as Array<{ name: string; kind: string }>;
+    expect(list.map((b) => b.name)).toEqual(expect.arrayContaining(["Rent", "Househelp"]));
+  });
+
   it("adds pantry items in bulk, merging with what's there", async () => {
     await addPantryItems(ctx, hid, owner, [{ name: "Rice", quantity: 1, unit: "kg" }]);
     const r = await run("add_pantry_items", { items: [{ name: "rice", quantity: 2, unit: "kg" }, { name: "Milk", quantity: 2, unit: "l" }, { name: "Eggs", quantity: 12 }, { name: "milk", quantity: 1, unit: "l" }] }) as { created: number; updated: number };

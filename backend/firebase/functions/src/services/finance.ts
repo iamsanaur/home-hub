@@ -236,3 +236,33 @@ export async function listBills(ctx: Ctx, hid: string, actor: Actor) {
     };
   });
 }
+
+/** A bill with a fixed amount (rent, a househelp's monthly pay, insurance, subscriptions). Not charged per delivery. */
+export const FixedBillInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  provider: z.string().trim().max(120).optional(),
+  amountMinor: z.number().int().min(1).max(100_000_000_00),
+  /** Next due date, YYYY-MM-DD in the household's time zone. */
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  repeat: z.enum(["monthly", "yearly", "none"]).default("monthly"),
+  category: z.string().trim().min(1).max(60).default("Utilities"),
+  reminderDaysBefore: z.number().int().min(0).max(30).default(3),
+  idempotencyKey: z.string().max(128).optional(),
+});
+
+export async function createFixedBill(ctx: Ctx, hid: string, actor: Actor, input: z.infer<typeof FixedBillInput>) {
+  await requireCapability(ctx, hid, actor.uid, "finance.write");
+  const { currency, timezone } = await hh(ctx, hid);
+  const due = DateTime.fromISO(input.dueDate, { zone: timezone }).set({ hour: 10 });
+  if (!due.isValid) throw invalid("dueDate must be YYYY-MM-DD");
+  return idempotent(ctx, { hid, uid: actor.uid, op: "create_bill" }, input.idempotencyKey, async () => {
+    const at = Timestamp.fromDate(due.toJSDate());
+    const { id } = await createDoc(ctx, hid, "bills", actor, {
+      name: input.name, provider: input.provider ?? null, category: input.category, amountMinor: input.amountMinor, currency,
+      nextDueAt: at, seriesStartAt: at, recurrence: input.repeat === "none" ? null : { freq: input.repeat },
+      reminderDaysBefore: input.reminderDaysBefore, active: true, status: "upcoming",
+    });
+    await audit(ctx, hid, actor, "bills.created", { type: "bill", id }, { amountMinor: input.amountMinor, repeat: input.repeat });
+    return { id, amountMinor: input.amountMinor, currency, nextDueAt: due.toUTC().toISO() };
+  });
+}
