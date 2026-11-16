@@ -48,3 +48,6 @@ android/app/src/main/assets/hermes/
 # Real Firebase project configs (copied into the apps by scripts/use-firebase.sh)
 config/firebase/
 config/alexa/
+config/release/
+*.jks
+dist/
