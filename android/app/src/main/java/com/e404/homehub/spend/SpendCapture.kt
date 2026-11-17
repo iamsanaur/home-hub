@@ -49,8 +49,16 @@ object SpendCapture {
     )
 
     private val AMOUNT = Regex("""(₹|\bRs\.?|\bINR)\s*[0-9][0-9,]*(\.[0-9]{1,2})?""", RegexOption.IGNORE_CASE)
-    private val VERB = Regex("""\b(debited|credited|paid|spent|sent|received|withdrawn|purchase)\b""", RegexOption.IGNORE_CASE)
-    private val NOT_PAYMENT = Regex("""\b(OTP|one[- ]time password|verification code|will be debited|is due|has requested|collect request)\b""", RegexOption.IGNORE_CASE)
+    // Keep this a superset-compatible match of the server parser (finance/spendCapture.ts DEBIT/CREDIT): anything the
+    // server could file must be allowed to leave the phone, or bank SMS like "Txn of Rs 500 …" or "… Dr." never arrive.
+    private val VERB = Regex(
+        """\b(debited|credited|paid|spent|sent|received|withdrawn|purchase|txn of|transaction of|used for|refund(ed)?|cashback|deposited)\b|\b(dr|cr)\b\.?""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val NOT_PAYMENT = Regex(
+        """\b(OTP|one[- ]time password|verification code|will be (debited|deducted|charged)|(is|are) due|has requested|requested (money|payment)|collect request|failed|declined|unsuccessful|not processed)\b""",
+        RegexOption.IGNORE_CASE,
+    )
 
     /** On-device filter: only completed-payment-looking text is ever sent. */
     fun looksLikePayment(text: String): Boolean =
@@ -82,6 +90,14 @@ object SpendCapture {
 }
 
 class SpendNotificationListener : NotificationListenerService() {
+    /** The system can drop the binding (app update, battery management); ask to be reconnected so capture doesn't silently stop. */
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        if (SpendCapture.isEnabled(applicationContext) && SpendCapture.hasAccess(applicationContext)) {
+            runCatching { requestRebind(ComponentName(applicationContext, SpendNotificationListener::class.java)) }
+        }
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val ctx = applicationContext
         // Debug builds also accept `adb shell cmd notification post` (package com.android.shell) for end-to-end QA.
