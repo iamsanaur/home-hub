@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -79,12 +80,18 @@ fun SpendReviewScreen() {
     val chosen = remember { mutableStateMapOf<String, String>() }
     var busy by remember { mutableStateOf<String?>(null) }
     var dismissing by remember { mutableStateOf<JsonObject?>(null) }
+    var importing by remember { mutableStateOf(false) }
     LaunchedEffect(h.hid, tick) {
         runCatching { graph.spend.pending(h.hid) }.onSuccess { items = it; error = null }.onFailure { error = it.message }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { tick++ }
 
     ListScreen("To review", subtitle = "Payments captured automatically") {
+        item {
+            GroupedList {
+                HomeHubListTile("Import a statement", subtitle = "PhonePe, Google Pay, Paytm or a bank PDF — read on this phone", leadingIcon = Icons.Outlined.UploadFile, onClick = { importing = true })
+            }
+        }
         item {
             val list = items
             when {
@@ -132,6 +139,7 @@ fun SpendReviewScreen() {
             }
         }
     }
+    if (importing) StatementImportSheet(onDismiss = { importing = false }, onImported = { tick++ })
     dismissing?.let { x ->
         ConfirmationDialog("Dismiss this payment?", "It won't be added to Finance. You can still add it by hand.", "Dismiss",
             onConfirm = {

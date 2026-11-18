@@ -50,7 +50,11 @@ targets:
   HomeHubTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [HomeHubTests]
+    sources:
+      - HomeHubTests
+      # The statement reader is held to the same fixtures as Android's.
+      - path: ../shared/statement-fixtures
+        buildPhase: resources
     dependencies:
       - target: HomeHub
     settings:

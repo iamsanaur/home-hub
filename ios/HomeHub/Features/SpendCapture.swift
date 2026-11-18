@@ -70,10 +70,13 @@ struct SpendReviewView: View {
     @State private var busy: String?
     @State private var dismissing: JItem?
     @State private var note: String?
+    @State private var importing = false
 
     var body: some View {
         if let h = hOpt {
             Screen(title: "To review", subtitle: "Payments captured automatically") {
+                HHButton(title: "Import a statement", kind: .secondary, systemImage: "doc.badge.arrow.up") { importing = true }
+                    .padding(.top, Space.md)
                 if let list = items {
                     if list.isEmpty {
                         EmptyStateView(systemImage: "tray", title: "Nothing to review", message: "Payments captured from your bank messages appear here. Nothing is added to Finance until you confirm it.")
@@ -87,6 +90,7 @@ struct SpendReviewView: View {
                 else { LoadingSkeleton().padding(.top, Space.lg) }
             }
             .refreshable { tick += 1 }
+            .sheet(isPresented: $importing) { StatementImportSheet(h: h) { tick += 1 }.presentationDetents([.large]) }
             .task(id: tick) {
                 do { items = (try await Gateway.shared.call("GET", "/v1/households/\(h.hid)/spend/captures"))["items"] as? [[String: Any]] ?? []; error = nil }
                 catch { self.error = error.localizedDescription }

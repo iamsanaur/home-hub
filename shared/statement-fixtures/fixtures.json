@@ -1,0 +1,140 @@
+{
+  "_comment": "Shared by the Android (StatementParserTest) and iOS (StatementParserTests) statement readers. 'lines' is what PDF text extraction yields, one string per line; 'rows' is exactly what the reader must produce (zone Asia/Kolkata). Layouts are modelled on each app's statement export; add real (redacted) lines here when a statement is misread.",
+  "zone": "Asia/Kolkata",
+  "cases": [
+    {
+      "name": "phonepe",
+      "app": "phonepe",
+      "lines": [
+        "PhonePe",
+        "Transaction Statement for 98XXXXXX10",
+        "Nov 01, 2026 - Nov 17, 2026",
+        "Date Transaction Details Type Amount",
+        "Nov 17, 2026 Paid to Swiggy DEBIT ₹450",
+        "10:15 AM Transaction ID T2611171015123456789012",
+        "UTR No. 432112345678",
+        "Paid by XXXXXXXX1234",
+        "Nov 16, 2026 Received from Rahul Sharma CREDIT ₹1,200",
+        "06:40 PM Transaction ID T2611161840987654321098",
+        "UTR No. 432198765432",
+        "Credited to XXXXXXXX1234",
+        "Nov 15, 2026 Paid to Uber Payment failed DEBIT ₹210",
+        "09:05 AM Transaction ID T2611150905000000000001",
+        "Page 1 of 1"
+      ],
+      "rows": [
+        { "occurredAt": "2026-11-17T10:15:00+05:30", "timeKnown": true, "amountMinor": 45000, "direction": "debit", "merchant": "Swiggy", "upiRef": "432112345678", "accountLast4": "1234" },
+        { "occurredAt": "2026-11-16T18:40:00+05:30", "timeKnown": true, "amountMinor": 120000, "direction": "credit", "merchant": "Rahul Sharma", "upiRef": "432198765432", "accountLast4": "1234" }
+      ],
+      "skipped": 0
+    },
+    {
+      "name": "gpay",
+      "app": "gpay",
+      "lines": [
+        "Google Pay",
+        "Transaction statement for 98XXXXXX10",
+        "01 November 2026 - 17 November 2026",
+        "Date & time Transaction details Amount",
+        "17Nov, 2026 Paid to Swiggy ₹450",
+        "12:30 PM UPI Transaction ID: 432112345678",
+        "Paid by HDFC Bank 1234",
+        "16Nov, 2026 Received from Rahul Sharma ₹1,200",
+        "06:40 PM UPI Transaction ID: 432198765432",
+        "Credited to HDFC Bank 1234",
+        "15Nov, 2026 Paid to Uber ₹210",
+        "09:05 AM UPI Transaction ID: 432100000111",
+        "Failed"
+      ],
+      "rows": [
+        { "occurredAt": "2026-11-17T12:30:00+05:30", "timeKnown": true, "amountMinor": 45000, "direction": "debit", "merchant": "Swiggy", "upiRef": "432112345678", "accountLast4": "1234" },
+        { "occurredAt": "2026-11-16T18:40:00+05:30", "timeKnown": true, "amountMinor": 120000, "direction": "credit", "merchant": "Rahul Sharma", "upiRef": "432198765432", "accountLast4": "1234" }
+      ],
+      "skipped": 0
+    },
+    {
+      "name": "paytm",
+      "app": "paytm",
+      "lines": [
+        "Paytm Statement for 98XXXXXX10",
+        "Date & Time Transaction Details Your Account Amount",
+        "17 Nov 2026 Paid to Swiggy - Rs.450",
+        "10:15 AM Order ID 2611171015000123",
+        "UPI Ref No: 432112345678",
+        "Paid from HDFC Bank - 1234",
+        "16 Nov 2026 Received from Rahul Sharma + Rs.1,200",
+        "06:40 PM UPI Ref No: 432198765432",
+        "Credited to HDFC Bank - 1234"
+      ],
+      "rows": [
+        { "occurredAt": "2026-11-17T10:15:00+05:30", "timeKnown": true, "amountMinor": 45000, "direction": "debit", "merchant": "Swiggy", "upiRef": "432112345678", "accountLast4": "1234" },
+        { "occurredAt": "2026-11-16T18:40:00+05:30", "timeKnown": true, "amountMinor": 120000, "direction": "credit", "merchant": "Rahul Sharma", "upiRef": "432198765432", "accountLast4": "1234" }
+      ],
+      "skipped": 0
+    },
+    {
+      "name": "bank_hdfc_balance_tracking",
+      "app": "bank",
+      "lines": [
+        "Date Narration Chq./Ref.No. Value Dt Withdrawal Amt. Deposit Amt. Closing Balance",
+        "Opening Balance 10,000.00",
+        "15/11/26 UPI-SWIGGY-swiggy@icici-ICIC0000001-432112345678-UPI 0000432112345678 15/11/26 450.00 9,550.00",
+        "16/11/26 NEFT CR-ACME PVT LTD-SALARY 000123 16/11/26 50,000.00 59,550.00",
+        "16/11/26 UPI-RAHUL SHARMA-rahul@oksbi-SBIN0001-432198765432-UPI 0000432198765432 16/11/26 1,200.00 60,750.00",
+        "17/11/26 ATM WDL 00123 17/11/26 2,000.00 58,750.00",
+        "17/11/26 UPI-UBER INDIA-uber@axis-UTIB0000-432100000222-UPI 0000432100000222 17/11/26 210.00 58,540.00"
+      ],
+      "rows": [
+        { "occurredAt": "2026-11-15T12:00:00+05:30", "timeKnown": false, "amountMinor": 45000, "direction": "debit", "merchant": "Swiggy", "upiRef": "432112345678" },
+        { "occurredAt": "2026-11-16T12:00:00+05:30", "timeKnown": false, "amountMinor": 120000, "direction": "credit", "merchant": "Rahul Sharma", "upiRef": "432198765432" },
+        { "occurredAt": "2026-11-17T12:00:00+05:30", "timeKnown": false, "amountMinor": 21000, "direction": "debit", "merchant": "Uber India", "upiRef": "432100000222" }
+      ],
+      "skipped": 0
+    },
+    {
+      "name": "bank_newest_first",
+      "app": "bank",
+      "lines": [
+        "Date Narration Chq./Ref.No. Value Dt Withdrawal Amt. Deposit Amt. Closing Balance",
+        "17/11/26 UPI-UBER INDIA-uber@axis-UTIB0000-432100000222-UPI 0000432100000222 17/11/26 210.00 58,540.00",
+        "17/11/26 ATM WDL 00123 17/11/26 2,000.00 58,750.00",
+        "16/11/26 UPI-RAHUL SHARMA-rahul@oksbi-SBIN0001-432198765432-UPI 0000432198765432 16/11/26 1,200.00 60,750.00",
+        "16/11/26 NEFT CR-ACME PVT LTD-SALARY 000123 16/11/26 50,000.00 59,550.00"
+      ],
+      "rows": [
+        { "occurredAt": "2026-11-17T12:00:00+05:30", "timeKnown": false, "amountMinor": 21000, "direction": "debit", "merchant": "Uber India", "upiRef": "432100000222" },
+        { "occurredAt": "2026-11-16T12:00:00+05:30", "timeKnown": false, "amountMinor": 120000, "direction": "credit", "merchant": "Rahul Sharma", "upiRef": "432198765432" }
+      ],
+      "skipped": 0
+    },
+    {
+      "name": "bank_sbi_direction_marker",
+      "app": "bank",
+      "lines": [
+        "Txn Date Value Date Description Ref No./Cheque No. Debit Credit Balance",
+        "01/11/2026 01/11/2026 TO TRANSFER-UPI/DR/432100000333/ZOMATO/ICIC/zomato@icici - 299.00 - 5,000.00"
+      ],
+      "rows": [
+        { "occurredAt": "2026-11-01T12:00:00+05:30", "timeKnown": false, "amountMinor": 29900, "direction": "debit", "merchant": "Zomato", "upiRef": "432100000333" }
+      ],
+      "skipped": 0
+    },
+    {
+      "name": "bank_direction_unknown_is_skipped_not_guessed",
+      "app": "bank",
+      "lines": [
+        "Date Narration Chq./Ref.No. Value Dt Withdrawal Amt. Deposit Amt. Closing Balance",
+        "15/11/26 UPI-SWIGGY-swiggy@icici-ICIC0000001-432112345678-UPI 0000432112345678 15/11/26 450.00 9,550.00"
+      ],
+      "rows": [],
+      "skipped": 1
+    },
+    {
+      "name": "not_a_statement",
+      "app": "other",
+      "lines": [ "Dear customer,", "Thank you for banking with us.", "Page 1 of 1" ],
+      "rows": [],
+      "skipped": 0
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { Actor, AppError, Ctx, audit, invalid, notFound, paths, requireCapability, sha256, ts } from "../services/base";
 import { recordExpense } from "../services/finance";
+import { StatementImportInput, importStatement } from "./statementImport";
 
 export type Direction = "debit" | "credit";
 export type PayMethod = "upi" | "card" | "bank_transfer" | "wallet" | "other";
@@ -247,6 +248,10 @@ export function mountSpendRoutes(app: Express, ctx: Ctx, wrap: Wrap) {
   app.post("/v1/households/:hid/spend/captures", wrap(async (req, res) => {
     const r = await captureSpend(ctx, p(req, "hid"), actor(req), parse(CaptureInput, req.body));
     res.status(r.status === "captured" ? 201 : 200).json(r);
+  }));
+  // Statement import (rows parsed on the phone; the PDF never leaves it). dryRun=true previews without writing.
+  app.post("/v1/households/:hid/spend/imports", wrap(async (req, res) => {
+    res.json(await importStatement(ctx, p(req, "hid"), actor(req), parse(StatementImportInput, req.body)));
   }));
   app.get("/v1/households/:hid/spend/captures", wrap(async (req, res) => {
     const status = z.enum(["pending", "confirmed", "dismissed"]).catch("pending").parse(req.query.status);

@@ -26,8 +26,8 @@ android {
         applicationId = "com.e404.homehub"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "HAS_GOOGLE_SERVICES", hasGoogleServices.toString())
         // 10.0.2.2 is the host machine from the Android emulator.
@@ -122,6 +122,7 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.coroutines.play.services)
     implementation(libs.okhttp)
+    implementation(libs.pdfbox) // reads statement PDFs on the phone (text only); nothing is uploaded
     implementation(libs.serialization.json)
     implementation(libs.haze)
 
