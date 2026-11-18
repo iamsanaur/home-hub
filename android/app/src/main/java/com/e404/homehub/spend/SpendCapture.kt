@@ -70,6 +70,16 @@ object SpendCapture {
     fun enable(context: Context, hid: String) = prefs(context).edit().putBoolean("enabled", true).putString("hid", hid).apply()
     fun disable(context: Context) = prefs(context).edit().putBoolean("enabled", false).apply()
 
+    /**
+     * A one-line trail of what capture last did, shown in Settings so a silent failure is visible.
+     * Metadata only (time, app, outcome) — never the message text.
+     */
+    fun note(context: Context, stage: String, detail: String) {
+        prefs(context).edit().putString("trail_$stage", "${java.time.LocalTime.now().withNano(0)} · $detail").apply()
+        android.util.Log.i("HomeHubSpend", "$stage: $detail")
+    }
+    fun trail(context: Context, stage: String): String? = prefs(context).getString("trail_$stage", null)
+
     /** Whether the person has granted HomeHub notification access in system settings. */
     fun hasAccess(context: Context): Boolean {
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: return false
@@ -102,15 +112,18 @@ class SpendNotificationListener : NotificationListenerService() {
         val ctx = applicationContext
         // Debug builds also accept `adb shell cmd notification post` (package com.android.shell) for end-to-end QA.
         val allowed = sbn.packageName in SpendCapture.PAYMENT_APPS || (com.e404.homehub.BuildConfig.DEBUG && sbn.packageName == "com.android.shell")
-        if (!SpendCapture.isEnabled(ctx) || !allowed) return
-        val hid = SpendCapture.householdId(ctx) ?: return
+        if (!allowed) return
+        if (!SpendCapture.isEnabled(ctx)) { SpendCapture.note(ctx, "seen", "${sbn.packageName} · ignored: capture is switched off in HomeHub settings"); return }
+        val hid = SpendCapture.householdId(ctx) ?: run { SpendCapture.note(ctx, "seen", "${sbn.packageName} · ignored: no household saved, switch capture off and on"); return }
         val extras = sbn.notification.extras
         val text = listOfNotNull(
             extras.getCharSequence(Notification.EXTRA_TITLE),
             extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT),
         ).joinToString(" ").trim()
         if (com.e404.homehub.BuildConfig.DEBUG) android.util.Log.d("HomeHubSpend", "pkg=${sbn.packageName} payment=${SpendCapture.looksLikePayment(text)} text=${text.take(80)}")
-        if (!SpendCapture.looksLikePayment(text) || SpendCapture.seenRecently(ctx, text)) return
+        if (!SpendCapture.looksLikePayment(text)) { SpendCapture.note(ctx, "seen", "${sbn.packageName} · not a payment (${text.length} chars)"); return }
+        if (SpendCapture.seenRecently(ctx, text)) { SpendCapture.note(ctx, "seen", "${sbn.packageName} · payment, already sent"); return }
+        SpendCapture.note(ctx, "seen", "${sbn.packageName} · payment, queued for upload")
         SpendUploadWorker.enqueue(ctx, hid, text, Instant.ofEpochMilli(sbn.postTime).toString(), sbn.packageName)
     }
 }
@@ -119,7 +132,7 @@ class SpendNotificationListener : NotificationListenerService() {
 class SpendUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val graph = AppGraph.get(applicationContext)
-        if (graph.auth.currentUser == null) return Result.success() // signed out: drop silently
+        if (graph.auth.currentUser == null) { SpendCapture.note(applicationContext, "upload", "dropped: HomeHub is signed out"); return Result.success() }
         val hid = inputData.getString("hid") ?: return Result.failure()
         val body = buildJsonObject {
             put("source", "android_notification")
@@ -128,9 +141,14 @@ class SpendUploadWorker(context: Context, params: WorkerParameters) : CoroutineW
             inputData.getString("sender")?.let { put("sender", it) }
         }
         return try {
-            graph.gateway.call("POST", "/v1/households/$hid/spend/captures", body); Result.success()
+            val r = graph.gateway.call("POST", "/v1/households/$hid/spend/captures", body)
+            val status = (r as? JsonObject)?.get("status")?.toString()?.trim('"') ?: "ok"
+            SpendCapture.note(applicationContext, "upload", "sent · server says $status")
+            Result.success()
         } catch (e: GatewayException) {
-            if (e.code == "network" || e.status >= 500 || e.status == 429) Result.retry() else Result.failure()
+            val retry = e.code == "network" || e.status >= 500 || e.status == 429
+            SpendCapture.note(applicationContext, "upload", "${if (retry) "will retry" else "rejected"} · HTTP ${e.status} ${e.code}")
+            if (retry) Result.retry() else Result.failure()
         }
     }
 

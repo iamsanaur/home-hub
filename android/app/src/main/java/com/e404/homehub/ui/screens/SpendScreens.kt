@@ -151,7 +151,8 @@ fun SpendCaptureSettings() {
     var enabled by remember { mutableStateOf(SpendCapture.isEnabled(context)) }
     var access by remember { mutableStateOf(SpendCapture.hasAccess(context)) }
     var disclosing by remember { mutableStateOf(false) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { access = SpendCapture.hasAccess(context); enabled = SpendCapture.isEnabled(context) }
+    var refresh by remember { mutableStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { access = SpendCapture.hasAccess(context); enabled = SpendCapture.isEnabled(context); refresh++ }
     if (!h.canFinance) return
     Column {
         SectionHeader("Automatic spending")
@@ -167,6 +168,17 @@ fun SpendCaptureSettings() {
                 }
                 Switch(enabled, { on -> if (on) disclosing = true else { SpendCapture.disable(context); enabled = false } },
                     colors = SwitchDefaults.colors(checkedTrackColor = c.brand))
+            }
+            if (enabled && access) {
+                Divider()
+                Column(Modifier.fillMaxWidth().padding(horizontal = Space.md, vertical = Space.sm)) {
+                    val seen = remember(refresh) { SpendCapture.trail(context, "seen") }
+                    val upload = remember(refresh) { SpendCapture.trail(context, "upload") }
+                    Text("Last notification seen", style = t.caption, color = c.inkTertiary)
+                    Text(seen ?: "None yet — nothing from a payment or SMS app has arrived since capture was switched on", style = t.bodyCompact, color = c.inkSecondary)
+                    Text("Last upload", style = t.caption, color = c.inkTertiary, modifier = Modifier.padding(top = Space.xs))
+                    Text(upload ?: "None yet", style = t.bodyCompact, color = c.inkSecondary)
+                }
             }
             if (enabled && !access) {
                 Divider()
