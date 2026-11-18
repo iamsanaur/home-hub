@@ -191,6 +191,14 @@ describe("people and payments are never done by the assistant alone", () => {
     const pays = (await ctx.db.collection(`households/${hid}/billPayments`).get()).docs.map((d) => d.data());
     expect(pays).toHaveLength(1); expect(pays[0]).toMatchObject({ amountMinor: 1_300_000, method: "upi" });
   });
+  it("a bill payment accepts a plain date like 2026-11-02 and books it on that day", async () => {
+    await run("create_bill", { name: "Internet", amount: 999, due_date: "2026-11-02" });
+    const id = await pend("record_bill_payment", { bill: "internet", amount: 999, paid_at: "2026-11-02", method: "upi" });
+    await decideApproval(ctx, hid, owner, id, "approve");
+    const pays = (await ctx.db.collection(`households/${hid}/billPayments`).get()).docs.map((d) => d.data());
+    const day = new Date((pays[0].paidAt as { toDate(): Date }).toDate().getTime() + 5.5 * 3600_000).toISOString().slice(0, 10); // India time
+    expect(day).toBe("2026-11-02");
+  });
   it("an invitation is created only after approval, and the invite link never reaches the assistant", async () => {
     const before0 = (await ctx.db.collection(`households/${hid}/invitations`).get()).size;
     const id = await pend("invite_member", { email: "guest@example.com", role: "adult" });

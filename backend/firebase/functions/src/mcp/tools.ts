@@ -65,6 +65,17 @@ const billRef = {
 };
 const pickBill = (x: { bill?: string; bill_id?: string; name?: string }) => ({ billId: x.bill_id, name: x.bill ?? x.name });
 const grant = z.string().describe("The HomeHub grant from your instructions. Required.");
+/**
+ * A date the person may give as just "2026-11-02" or as a full ISO time. A bare date is stored as midday UTC so it
+ * lands on that calendar day in India. Checked in code rather than with IsoDateTime's very long pattern, which keeps
+ * the tool list (sent to the model with every request) small.
+ */
+const DateOrDateTime = z.string().max(40).describe("Date YYYY-MM-DD, or full ISO date-time").transform((v, c) => {
+  if (IsoDate.safeParse(v).success && !Number.isNaN(Date.parse(`${v}T00:00:00Z`))) return `${v}T12:00:00.000Z`;
+  if (IsoDateTime.safeParse(v).success) return v;
+  c.issues.push({ code: "custom", message: "Use a date like 2026-11-02 or a full date-time like 2026-11-02T10:00:00+05:30", input: v });
+  return z.NEVER;
+});
 const idem = IdempotencyKey.optional().describe("Optional key so a retried write is applied once");
 
 function tool<S extends z.ZodRawShape>(def: ToolDef<S>): ToolDef {
@@ -261,7 +272,7 @@ export const TOOLS: ToolDef[] = [
     shape: { ...MaintenanceRequestInput.shape, idempotency_key: idem }, risk: "reversible_write",
     run: (ctx, hid, a, x) => { const { idempotency_key, ...m } = x; return createMaintenanceRequest(ctx, hid, a, MaintenanceRequestInput.parse(m)); } }),
   tool({ name: "schedule_service_reminder", description: "Set an asset's next service date and a reminder task.",
-    shape: { asset_id: z.string().max(128), due_at: IsoDateTime, note: z.string().max(500).optional() }, risk: "reversible_write",
+    shape: { asset_id: z.string().max(128), due_at: DateOrDateTime, note: z.string().max(500).optional() }, risk: "reversible_write",
     run: (ctx, hid, a, x) => scheduleServiceReminder(ctx, hid, a, { assetId: x.asset_id, dueAt: x.due_at, note: x.note }) }),
 
   // ---- calendar ----
@@ -321,7 +332,7 @@ export const TOOLS: ToolDef[] = [
     shape: { ...RecipeInput.shape, idempotency_key: idem }, risk: "reversible_write", run: (ctx, hid, a, x) => { const { idempotency_key, ...r } = x; return createRecipe(ctx, hid, a, RecipeInput.parse(r)); } }),
   tool({ name: "list_cleaning", description: "Cleaning routines: room, how often, who, next due, last done.", shape: {}, risk: "read", run: (ctx, hid, a) => listCleaning(ctx, hid, a) }),
   tool({ name: "create_cleaning_routine", description: "Add a room-wise cleaning routine (daily, weekly, monthly or seasonal), optionally assigned and as a deep clean.",
-    shape: { title: z.string().min(1).max(120), room: z.string().max(80).optional(), frequency: z.enum(["daily", "weekly", "monthly", "seasonal"]), assignee_uid: z.string().max(128).optional(), next_due_at: IsoDateTime.optional(), deep_clean: z.boolean().default(false), idempotency_key: idem }, risk: "reversible_write",
+    shape: { title: z.string().min(1).max(120), room: z.string().max(80).optional(), frequency: z.enum(["daily", "weekly", "monthly", "seasonal"]), assignee_uid: z.string().max(128).optional(), next_due_at: DateOrDateTime.optional(), deep_clean: z.boolean().default(false), idempotency_key: idem }, risk: "reversible_write",
     run: (ctx, hid, a, x) => createCleaningRoutine(ctx, hid, a, { title: x.title, roomName: x.room, frequency: x.frequency, assigneeUid: x.assignee_uid, nextDueAt: x.next_due_at, deepClean: x.deep_clean }) }),
   tool({ name: "mark_cleaned", description: "Record that a cleaning routine was done now; schedules the next one.", shape: { routine: z.string().min(1).max(120).describe("Routine name or id") }, risk: "reversible_write", run: (ctx, hid, a, x) => markCleaned(ctx, hid, a, x.routine) }),
   tool({ name: "list_notes", description: "Shared household notes and your own private notes (title and a short excerpt).", shape: { limit: z.number().int().min(1).max(50).default(20) }, risk: "read", run: (ctx, hid, a, x) => listNotes(ctx, hid, a, x.limit) }),
@@ -385,14 +396,14 @@ export const TOOLS: ToolDef[] = [
   // ---- savings, assets, comments, documents ----
   tool({ name: "list_savings_goals", description: "Savings goals with saved, remaining and percent (amounts in minor units).", shape: {}, risk: "read", run: (ctx, hid, a) => listSavingsGoals(ctx, hid, a) }),
   tool({ name: "create_savings_goal", description: "Create a savings goal. target is in MAJOR units (₹60,000 → 60000). Bookkeeping only.",
-    shape: { name: z.string().min(1).max(120), target: z.number().positive().max(1_000_000_000), already_saved: z.number().min(0).max(1_000_000_000).default(0), target_date: IsoDateTime.optional(), idempotency_key: idem }, risk: "bounded_write",
+    shape: { name: z.string().min(1).max(120), target: z.number().positive().max(1_000_000_000), already_saved: z.number().min(0).max(1_000_000_000).default(0), target_date: DateOrDateTime.optional(), idempotency_key: idem }, risk: "bounded_write",
     run: async (ctx, hid, a, x) => { const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR"; return createSavingsGoal(ctx, hid, a, { name: x.name, targetMinor: parseDecimal(String(x.target), cur).amountMinor, savedMinor: parseDecimal(String(x.already_saved), cur).amountMinor, targetDate: x.target_date }); } }),
   tool({ name: "add_to_savings_goal", description: "Record money set aside for a goal (positive) or taken out (negative), in MAJOR units. Bookkeeping only; it never moves money.",
     shape: { goal: z.string().min(1).max(120).describe("Goal name or id"), amount: z.number().min(-1_000_000_000).max(1_000_000_000), idempotency_key: idem }, risk: "bounded_write",
     run: async (ctx, hid, a, x) => { const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR"; const m = parseDecimal(String(Math.abs(x.amount)), cur).amountMinor; return addToSavingsGoal(ctx, hid, a, x.goal, x.amount < 0 ? -m : m); } }),
   tool({ name: "list_assets", description: "Household assets (appliances, vehicles, big items) with warranty and next service dates.", shape: {}, risk: "read", run: (ctx, hid, a) => listAssets(ctx, hid, a) }),
   tool({ name: "create_asset", description: "Add an asset so maintenance and warranty can be tracked.",
-    shape: { name: z.string().min(1).max(120), category: z.string().max(40).optional(), brand: z.string().max(60).optional(), model: z.string().max(60).optional(), location: z.string().max(80).optional(), purchase_date: IsoDateTime.optional(), warranty_expires_at: IsoDateTime.optional(), service_interval_days: z.number().int().min(1).max(3650).optional(), idempotency_key: idem }, risk: "reversible_write",
+    shape: { name: z.string().min(1).max(120), category: z.string().max(40).optional(), brand: z.string().max(60).optional(), model: z.string().max(60).optional(), location: z.string().max(80).optional(), purchase_date: DateOrDateTime.optional(), warranty_expires_at: DateOrDateTime.optional(), service_interval_days: z.number().int().min(1).max(3650).optional(), idempotency_key: idem }, risk: "reversible_write",
     run: (ctx, hid, a, x) => createAsset(ctx, hid, a, { name: x.name, category: x.category, brand: x.brand, model: x.model, location: x.location, purchaseDate: x.purchase_date, warrantyExpiresAt: x.warranty_expires_at, serviceIntervalDays: x.service_interval_days }) }),
   tool({ name: "list_task_comments", description: "Comments on a task, oldest first.", shape: { task_id: z.string().max(128) }, risk: "read", run: (ctx, hid, a, x) => listTaskComments(ctx, hid, a, x.task_id) }),
   tool({ name: "add_task_comment", description: "Add a comment to a task (visible to adults and the assignee).", shape: { task_id: z.string().max(128), body: z.string().min(1).max(2000), idempotency_key: idem }, risk: "reversible_write", run: (ctx, hid, a, x) => addTaskComment(ctx, hid, a, x.task_id, x.body) }),
@@ -408,7 +419,7 @@ export const TOOLS: ToolDef[] = [
     shape: { member: z.string().min(1).max(120).describe("Member's name or id"), role: z.enum(["admin", "adult", "child", "staff"]) }, risk: "sensitive", sensitive: "irreversible",
     run: async (ctx, hid, a, x) => { const m = await findMember(ctx, hid, x.member); await changeMemberRole(ctx, a, hid, m.uid, { role: x.role }); return { member: m.name, role: x.role }; } }),
   tool({ name: "record_bill_payment", description: "Propose recording that a bill was paid (amount in MAJOR units, paid date, method). ALWAYS needs a person's approval and is bookkeeping only: HomeHub never pays anything. Do not use unless the person says they already paid.",
-    shape: { bill: z.string().min(1).max(128).describe("Bill name or id"), amount: z.number().positive().max(100_000_000), paid_at: IsoDateTime, method: z.enum(["cash", "upi", "card", "bank_transfer", "wallet", "other"]), reference: z.string().max(120).optional(), idempotency_key: idem }, risk: "sensitive", sensitive: "payment",
+    shape: { bill: z.string().min(1).max(128).describe("Bill name or id"), amount: z.number().positive().max(100_000_000), paid_at: DateOrDateTime, method: z.enum(["cash", "upi", "card", "bank_transfer", "wallet", "other"]), reference: z.string().max(120).optional(), idempotency_key: idem }, risk: "sensitive", sensitive: "payment",
     run: async (ctx, hid, a, x) => {
       const cur = (await ctx.db.doc(paths.household(hid)).get()).data()?.currency ?? "INR";
       const bills = (await listBills(ctx, hid, a)) as unknown as Array<{ id: string; name: string }>;
