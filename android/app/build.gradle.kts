@@ -26,8 +26,8 @@ android {
         applicationId = "com.e404.homehub"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "HAS_GOOGLE_SERVICES", hasGoogleServices.toString())
         // 10.0.2.2 is the host machine from the Android emulator.

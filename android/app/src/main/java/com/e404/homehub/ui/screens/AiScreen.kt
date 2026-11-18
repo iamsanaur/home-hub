@@ -148,6 +148,8 @@ class AgentViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val history = _ui.value.sessionId?.let { sid -> graph.agent.messages(h.hid, sid).first().takeLast(6).map { ChatMessage(it.role, it.content) } }.orEmpty()
                 val outcome = graph.hermes.run(h.hid, prompt, _ui.value.sessionId, history) { e -> onEvent(e) }
+                // The assistant wrote on the server; reconnect so Finance, Tasks, Shopping etc. show it straight away.
+                launch { graph.data.resync() }
                 _ui.update { s ->
                     val text = when {
                         outcome.state == "deterministic" -> describeDeterministic(outcome.deterministicAnswer)

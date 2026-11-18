@@ -33,6 +33,15 @@ class HouseholdDataRepository(private val db: FirebaseFirestore, private val uid
         awaitClose { reg.remove() }
     }
 
+    /**
+     * Drops and re-opens Firestore's live connection so every open list catches up at once. On some networks the
+     * long-lived stream is cut every minute or two and screens can lag behind changes made elsewhere (for example by
+     * the assistant on the server). Cheap, and safe to call often; local pending writes are kept and re-sent.
+     */
+    suspend fun resync() {
+        runCatching { db.disableNetwork().await(); db.enableNetwork().await() }
+    }
+
     fun records(hid: String, collection: String, build: (Query) -> Query = { it }) = observe(hid, collection, build) { Record.from(collection, it) }
 
     fun <T> observeDoc(path: String, map: (DocumentSnapshot) -> T): Flow<T?> = callbackFlow {

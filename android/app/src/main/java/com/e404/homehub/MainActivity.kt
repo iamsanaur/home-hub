@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.e404.homehub.ui.HomeHubRoot
 import com.e404.homehub.ui.theme.HomeHubTheme
 
@@ -21,6 +23,12 @@ class MainActivity : ComponentActivity() {
                 HomeHubRoot(deepLink = deepLink.value, onDeepLinkHandled = { deepLink.value = null })
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Coming back to the app: refresh the live connection so nothing shown is stale.
+        lifecycleScope.launch { AppGraph.get(applicationContext).data.resync() }
     }
 
     override fun onNewIntent(intent: Intent) {
